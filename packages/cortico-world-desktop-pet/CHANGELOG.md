@@ -1,5 +1,6 @@
 ## Unreleased
 
+- A pack that `needs` `icons` gets the desktop's icons in `host.bounds().icons` (`{ id, x0, y0, x1, y1, occluded? }`, the image of each icon not wholly behind a window, in stage pixels) and the visible parts of their tops in `host.bounds().iconLedges` (`{ id, x0, x1, y }`), on Windows only for now (not yet tried on a machine); none while the desktop's icons are hidden. No labels or file names. `PACK_NEEDS` is `['windows', 'icons']`; `petHost.watchIcons` and `petHost.onIcons` (`{ icons, ledges }`), and the frame message `icons`. `ledges` keeps only window tops.
 - Each end of the pet window's and the dressing window's renderer is logged at WARN with its reason and exit code (in hex on Windows), noting when its page had not finished loading (`host/renderer-gone.cjs` `watchRenderer`, which an app can use for its own windows). Until the page loads again, the host stops sending it the cursor and the other windows' positions. Lines of the window process starting with `[warn] ` are logged at WARN, the rest at debug as before.
 - The description of `window.electronFile` says it is used only while `CORTICO_DESKTOP_PET_HOST` is not set.
 - Windows: after the scale of the pet window's display changes while the app runs, the window covers the work area again; it used to come out sized by the ratio of the old and new scales.
