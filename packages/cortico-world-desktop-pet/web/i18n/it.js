@@ -57,6 +57,8 @@ export default {
   'action.cuaOn': "Controllo del computer: attivo · clicca per disattivarlo",
   'action.cuaOffAsk': "Controllo del computer: disattivato · clicca per attivarlo nella finestra delle impostazioni",
   'action.cuaOff': "Controllo del computer: disattivato · clicca per attivarlo",
+  'action.workOn': "Modalità lavoro: attiva · clic per mettere via la scrivania",
+  'action.workOff': "Modalità lavoro: disattivata · clic per tirare fuori una scrivania e scrivere con te",
   'action.dress': 'Guardaroba',
   'action.worlds': 'I miei World',
   'action.hide': "Nascondimi per ora (l'icona nell'area di notifica mi riporta qui)",

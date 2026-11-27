@@ -60,6 +60,8 @@ export default {
   'action.cuaOn': "电脑操作：已开启 · 点击关闭",
   'action.cuaOffAsk': "电脑操作：已关闭 · 点击在设置窗口开启",
   'action.cuaOff': "电脑操作：已关闭 · 点击开启",
+  'action.workOn': "工作模式：已开启 · 点击收起桌子",
+  'action.workOff': "工作模式：已关闭 · 点击拿出桌子，跟着你打字",
   'action.dress': '装扮',
   'action.worlds': '我的 World',
   'action.hide': '隐藏桌宠（可从托盘图标重新显示）',

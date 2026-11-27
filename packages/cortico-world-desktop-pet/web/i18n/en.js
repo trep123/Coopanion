@@ -62,6 +62,8 @@ export default {
   'action.cuaOn': "Computer use: on · click to turn off",
   'action.cuaOffAsk': "Computer use: off · click to turn on in the settings window",
   'action.cuaOff': "Computer use: off · click to turn on",
+  'action.workOn': "Work mode: on · click to pack the desk away",
+  'action.workOff': "Work mode: off · click to bring out a desk and type along with you",
   'action.dress': 'Dress up',
   'action.worlds': 'My Worlds',
   'action.hide': 'Hide the pet (show Coo again from the tray icon)',

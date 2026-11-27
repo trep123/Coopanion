@@ -38,7 +38,7 @@
  *   bounds (`set({ bounds })` from the page changes what `host.bounds()` returns, then calls it); `do(word)`, `walk(x, run, id)`,
  *   `move({ to, run, params }, id)` (one of the manifest's `moves`, its `params` by id as the World checked them),
  *   `stopWalk(id)` (a walk's or a move's), `pointer(type, p)`, `drop(p)`, `shift(dx, dy)`, `place(x, facing, y)`,
- *   `set(state)` (the kit's `set`, with `status`: the kind of work the page's status bubble shows, or null), `cue(kind)`, `talk()`, `setScheme(id, { fade })`, `z` (the colour of its sleep z's),
+ *   `set(state)` (the kit's `set`, with `status`: the kind of work the page's status bubble shows, or null, and `work`: work mode, or null, see the kit's createBody), `cue(kind)`, `talk()`, `setScheme(id, { fade })`, `z` (the colour of its sleep z's),
  *   `words` (every word `do` knows; the kit's bodies list theirs, and the manifest's words not in it are
  *   kept from the bot) and `dispose()`. Only `step`, `layout` and `do` are required.
  * - events (`emit`): `arrived` and `interrupted` ({ walkId, x, y?, by }) for `walk` and `move` (`by`: a short word on what

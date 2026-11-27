@@ -57,6 +57,8 @@ export default {
   'action.cuaOn': "Uso de la computadora: activado · clic para desactivar",
   'action.cuaOffAsk': "Uso de la computadora: desactivado · clic para activarlo en la ventana de configuración",
   'action.cuaOff': "Uso de la computadora: desactivado · clic para activar",
+  'action.workOn': "Modo trabajo: activado · clic para guardar el escritorio",
+  'action.workOff': "Modo trabajo: desactivado · clic para sacar un escritorio y escribir contigo",
   'action.dress': 'Vestuario',
   'action.worlds': 'Mis Worlds',
   'action.hide': 'Escóndeme por ahora (el ícono de la bandeja me trae de vuelta)',

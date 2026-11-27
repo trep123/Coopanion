@@ -27,6 +27,8 @@ import { cssMs, growFrom } from './motion-frames.js';
 import { showHide } from './show-hide.js';
 import { motionLevel, setMotionChoice, watchMotion } from './motion-level.js';
 import { mountHints, tipOf, tipWithoutNote } from './hints.js';
+import { createWorkHands, createWorkMachine } from './work-state.js';
+import { DESK, createWorkDesk } from './work-desk.js';
 
 const $ = (s) => document.querySelector(s);
 const host = window.petHost || null;
@@ -68,6 +70,8 @@ const prefs = {
   cua: { on: false, confirmed: false, canOpen: false },
   /** Every click passes through the pet (the tray's "click through"): no hover buttons, and a bubble under the cursor does not wait. */
   clickThrough: false,
+  /** Work mode (`window.work`): the pet sits at a desk and its hands follow the keyboard and the mouse (stepWork). */
+  work: false,
 };
 // in a tab (the settings window's preview) the page is its own stage: a wall that answers the pointer, a floor with icons, a night/day button
 const modeBtn = host ? null : modeButton(document.body, () => prefs.theme, (theme) => applyPrefs({ theme }));
@@ -333,6 +337,8 @@ async function swapBody(s) {
   if (wanted !== s.figure) { next.dispose(); return; }
   holder.body = next;
   next.set({ roam: prefs.roam, ...bodyState });
+  // the new body hears work mode on the next frame
+  workSent = '';
   // the old body fades out as the new one fades in; the first one drops in as it is
   const old = body;
   body = next;
@@ -427,6 +433,7 @@ function applyPrefs(p) {
   }
   for (const key of ['fade', 'fullscreenFade']) if (typeof p[key] === 'number') fadeHeard[key].heard(p[key], fadeKey() === key && (SLIDERS.fade.bar.active || !!sliderState.timers.fade));
   if (typeof p.fadeWhenFullscreen === 'boolean') host?.fadeWhenFullscreen?.(p.fadeWhenFullscreen);
+  if (typeof p.work === 'boolean') prefs.work = p.work;
   if (p.cua && typeof p.cua === 'object') prefs.cua = { on: p.cua.on === true, confirmed: p.cua.confirmed === true, canOpen: p.cua.canOpen === true };
   const sized = [prefs.bubbleSize, prefs.fontSize];
   if (typeof p.bubbleSize === 'number') { prefs.bubbleSize = p.bubbleSize; sizeVar('--bubble-size', p.bubbleSize); }
@@ -535,6 +542,8 @@ function onBody(kind, d) {
 function walk(m) {
   holdRoam(20);
   if (!body) { send({ t: 'interrupted', walkId: m.id, x: .5, by: 'none' }); return; }
+  // at the desk the body stays where it is until work mode is off
+  if (work.phase !== 'off') { send({ t: 'interrupted', walkId: m.id, x: (at()?.x ?? 0) / innerWidth, by: 'work' }); return; }
   walkTargets.set(m.id, true);
   if (m.t === 'move') { body.move(m.move, m.id); return; }
   const x = m.to === 'cursor' ? (pointerSeen ? lastPointer.x : innerWidth / 2) : clamp(Number(m.to), 0, 1) * innerWidth;
@@ -1751,6 +1760,18 @@ const ACTIONS = {
       send({ t: 'prefs', cua: on });
     },
   },
+  // work mode: the pet sits at a desk and types and clicks along with the person; the World keeps the switch
+  work: {
+    keep: true,
+    icon: () => ICONS.work,
+    on: () => prefs.work,
+    state: () => t(prefs.work ? 'action.workOn' : 'action.workOff'),
+    run: () => {
+      // shown at once; the World's next prefs confirm it
+      prefs.work = !prefs.work;
+      send({ t: 'prefs', work: prefs.work });
+    },
+  },
   worlds: {
     // only where the embedding app has a World list to show
     available: () => !!prefs.bot?.buttons?.worlds,
@@ -2907,6 +2928,64 @@ function stepBackdrop(dt) {
   body?.setHalo(performance.now() < haloAfter ? 0 : backdrop.k * HALO_STRENGTH, prefs.glow);
 }
 
+/* ---------- work mode: a desk the page draws for every figure, at which the body sits and types along ---------- */
+/** How long the props take to come out and to be packed away (pet.css `--work-in`, `--work-out`); nothing at low motion. */
+const workMs = (name, fallback) => (lowMotion() ? 0 : cssMs(document.documentElement, name, fallback));
+const work = {
+  desk: createWorkDesk(stage, $('#figureLayer'), { enterMs: () => workMs('--work-in', 520) }),
+  machine: createWorkMachine({ enterMs: () => workMs('--work-in', 520), leaveMs: () => workMs('--work-out', 220) }),
+  hands: createWorkHands(),
+  /** The phase (work-state.js), whether the window reads the input, and the hands' view drawn last. */
+  get phase() { return work.machine.phase; },
+  watched: false,
+  view: null,
+};
+/** The work state last told to the body, as JSON. */
+let workSent = '';
+host?.onWork?.((m) => work.hands.feed(m, performance.now()));
+const round1 = (v) => Math.round(v * 10) / 10;
+/**
+ * Advances work mode by `dt`: the phase (walking clear of the edges, the props coming out, seated, carried away, packed
+ * up), the window's reading of the keyboard and mouse (only while the props are out), roaming held off, and what the body
+ * is told (the kit's `set({ work })`): never the keys, only the hand of the last press and a count.
+ */
+function stepWork(dt) {
+  const l = at(), S = bounds().S;
+  const room = { minX: DESK.reach * S + 8, maxX: innerWidth - DESK.reach * S - 8 };
+  const { phase, changed, target } = work.machine.step(prefs.work && !!body, l, room, T);
+  const watch = phase === 'enter' || phase === 'on';
+  if (watch !== work.watched) { work.watched = watch; host?.watchWork?.(watch); }
+  if (phase !== 'off') holdRoam(2);
+  if (changed) {
+    if (phase === 'walk') body?.walk(target, false, 0);
+    else if (phase === 'enter') {
+      // the desk faces the screen with the mouse on the right: the body turns that way first
+      if (l && l.facing !== 1) { if (words.has('turn')) body.do('turn'); else body.place(l.x, 1); }
+      work.desk.show();
+      sfx.play('pop', 'ui');
+    } else if (phase === 'on') {
+      // a body built on the kit sits down for `work`; one that is not may still know the word
+      if (words.has('sit')) body?.do('sit');
+    } else if (phase === 'away' || phase === 'leave') work.desk.hide(workMs('--work-out', 220));
+  }
+  work.hands.step(dt);
+  const v = work.view = work.hands.view(performance.now());
+  const state = phase === 'enter' || phase === 'on' || phase === 'leave' ? {
+    phase, hand: v.hand, taps: v.taps, held: v.held, password: v.password, desk: DESK,
+    mouse: { dx: round1(v.mouse.x), dy: round1(v.mouse.y), buttons: v.mouse.buttons, active: v.hands.right.onMouse },
+  } : null;
+  const key = JSON.stringify(state);
+  if (key !== workSent) { workSent = key; body?.set({ work: state }); }
+}
+/** Places the props over the body and draws the keys, the mouse and the paws (the pack's own hands when it says `can.work`). */
+function drawWork() {
+  const l = at();
+  if (work.desk.hidden || !l || !work.view) return;
+  const b = bounds();
+  work.desk.place(l.x, typeof l.y === 'number' ? l.y : b.floorY, b.S);
+  work.desk.draw(work.view, shownPack?.can?.work === true);
+}
+
 /* ---------- loop ---------- */
 /**
  * Frames per second: `prefs.frameRate` while the body moves (its layout's `moving`), changes figure, look or size, and
@@ -2951,6 +3030,7 @@ function frame(steps, now, last) {
       stepLines();
       stepStatus();
       setBody({ dialogOpen: !!item || !!listen.phase, still: !menu.hidden });
+      stepWork(dt);
       if (drawnScale.step(dt)) body?.set({ bounds: bounds() });
       body?.tick(dt, drawn && i === steps.length - 1);
     });
@@ -2963,6 +3043,7 @@ function frame(steps, now, last) {
       stepFade();
       stepLend();
       layout(dt);
+      drawWork();
       stepInputShape();
       // the frame's own time, so the layer shows frames as far apart as they were drawn
       if (overlayOn) host.overlayFrame(overlayRect(), performance.timeOrigin + now);

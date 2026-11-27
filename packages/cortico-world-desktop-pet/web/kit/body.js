@@ -122,7 +122,8 @@ const EDGE_INSET = 8;
  * `opts.figure` draws the body: `figure.draw(petG, face, frame)` keeps its own elements inside `petG` (logo space,
  * feet at y=256), once for every frame drawn, rest included, so it should write only what changed. Its frame adds
  * the face's name, the mode, how long the mode has run, the talk level, drowsiness, how far the body sits, and
- * `status`: the kind of work the page's status bubble shows (src/status.ts), or null.
+ * `status`: the kind of work the page's status bubble shows (src/status.ts), or null, and `work`: work mode as the page
+ * set it (createBody's `set`), or null.
  * `figure.groupTilt(mode, tilt, lean)`, if present, returns the rotation (degrees) the whole group gets
  * instead of tilt + lean; the frame carries tilt, lean and that rotation (groupRot) so the figure can bend the rest.
  * `figure.colors.z`, if present, colours the sleep z's (otherwise they take the `eye` class).
@@ -144,6 +145,8 @@ export function createPet(els, opts) {
   let roam = opts.roam ?? 'free';
   let skin = opts.skin || null;
   let hold = 0; // until T: an order from outside is in progress, free roaming waits
+  /** Work mode as the page tells it (`setWork`), or null: the body sits at the page's desk and does not roam. */
+  let work = null;
   const freeGround = opts.ground === 'free';
   const startFacing = opts.startFacing === -1 ? -1 : 1;
   const pet = {
@@ -259,8 +262,11 @@ export function createPet(els, opts) {
   const pickY = () => (freeGround ? rnd(minY(), floorY) : pet.gy);
 
   /** Runs a motion. Returns false when the body cannot take it now (in the air, being dragged). */
+  /** Motions that would take a body at the desk off its chair or across the stage. */
+  const OFF_THE_CHAIR = new Set(['stand', 'walk', 'run', 'jump', 'hop', 'look', 'turn', 'spin', 'sleep', 'dizzy', 'flap', 'dance']);
   function act(a) {
     if (busy()) return false;
+    if (work && OFF_THE_CHAIR.has(a)) return false;
     pet.expr = null; pet.lastAct = a;
     const seated = pet.mode === 'sleep' || pet.mode === 'sit';
     switch (a) {
@@ -346,7 +352,7 @@ export function createPet(els, opts) {
    * Resolves the walk through onEvent('arrived' | 'interrupted').
    */
   function walkTo(x, run, walkId, y) {
-    if (busy()) return false;
+    if (busy() || work) return false;
     if (pet.mode === 'sleep' || pet.mode === 'sit') setMode('wake', { startle: true });
     const target = walkEnd(x);
     const targetY = freeGround && typeof y === 'number' && Number.isFinite(y) ? clamp(y, minY(), floorY) : pet.gy;
@@ -368,6 +374,9 @@ export function createPet(els, opts) {
     if (m === 'air' && pet.airKind === 'drop') return 'surprised';
     if (m === 'dizzy') return pet.modeT < 2.4 ? 'dizzy' : 'squeeze';
     if (m === 'wake') return pet.startle ? 'surprised' : 'waking';
+    // a password being typed at the desk: the eyes shut
+    if (work?.password && m === 'sit') return 'squeeze';
+    if (work && m === 'sit' && !(pet.expr && T < pet.exprUntil) && !pet.listening) return pet.thinking ? 'thinking' : 'neutral';
     if (pet.listening && m !== 'sleep') return 'listening';
     if (m === 'sleep') return 'sleep';
     if (pet.expr && T < pet.exprUntil) return pet.expr;
@@ -402,18 +411,38 @@ export function createPet(els, opts) {
     }
   }
 
+  /**
+   * Work mode from the page (see createBody's `set`), or null. `enter` stands the body still where it is; `on` sits it
+   * down at the desk and holds it there; `leave` and null stand it up. Each new key press gives the body a small bounce.
+   */
+  function setWork(w) {
+    const was = work;
+    const phase = w && typeof w === 'object' && ['enter', 'on', 'leave'].includes(w.phase) ? w.phase : null;
+    work = phase ? w : null;
+    if (phase === 'leave' || !phase) {
+      if (was?.phase === 'on' && (pet.mode === 'sit' || pet.mode === 'sleep')) { setMode('idle'); pet.sqv -= 1.2; }
+      if (!phase && was) pet.nextAt = T + rnd(1.5, 3);
+      return;
+    }
+    if (phase === 'enter' && (pet.mode === 'walk' || pet.mode === 'run' || pet.mode === 'sit' || pet.mode === 'sleep')) setMode('idle');
+    if (phase === 'on' && !busy() && pet.mode !== 'sit') setMode('sit', { dur: 1e9, willSleep: false });
+    if (phase === 'on' && was?.phase === 'on' && w.taps > was.taps) pet.sqv += .35;
+  }
+
   function step(dt) {
     // a frame that took no time has nothing to advance, and the horizontal speed below divides by its length
     if (!(dt > 0 && dt < Infinity)) return;
     T += dt; pet.modeT += dt;
     A = anchors();
+    // work mode keeps the body seated at the desk, and sits it down again once it has landed from a carry or a throw
+    if (work?.phase === 'on' && pet.mode === 'idle') setMode('sit', { dur: 1e9, willSleep: false });
     const m = pet.mode, mt = pet.modeT;
     // an extent that follows the skin, or a lopsided body turning round, can widen the body where it stands; carried and flying bodies keep to the edges on their own
     if (m !== 'drag' && m !== 'air') { pet.x = clamp(pet.x, minX(), maxX()); pet.target = walkEnd(pet.target); }
     let sqT = 0, strideT = 0, liftT = 0, leanT = 0, sitT = 0, bobT = 0, rate = 0, lookT = [0, 0], tiltT = 0;
     let tk = 160, tc = 12, drowseT = 0;
     const still = !!opts.still?.();
-    const free = roam !== 'off' && T > hold && !opts.dialogOpen?.() && !still;
+    const free = roam !== 'off' && T > hold && !opts.dialogOpen?.() && !still && !work;
 
     pet.blinkT -= dt; pet.blinkAge += dt;
     if (pet.blinkT <= 0) { pet.blinkAge = 0; pet.blinkT = Math.random() < .2 ? .28 : rnd(2.2, 5.2); }
@@ -484,9 +513,11 @@ export function createPet(els, opts) {
       case 'sit': {
         sitT = 1;
         lookT = track().map(v => v * (1 - pet.drowse));
+        // at the desk the eyes are on the hands: the keyboard, or the mouse while the right hand is on it
+        if (work) lookT = work.hand === 'left' ? [-1, 5] : work.mouse?.active ? [4, 4] : [1, 5];
         if (pet.listening) { lookT = [3, -4]; tiltT = -7; }
         // awake while sitting; a sit that ends in sleep closes over its last ~1.6s; a held sit (the word) never dozes off
-        drowseT = pet.willSleep && free ? clamp((mt - (pet.dur - 1.6)) / 1.2, 0, 1) : .15;
+        drowseT = work ? 0 : pet.willSleep && free ? clamp((mt - (pet.dur - 1.6)) / 1.2, 0, 1) : .15;
         if (pet.drowse > .5) leanT = 7 * pet.drowse * Math.pow(Math.max(0, Math.sin(T * 1.3)), 6);
         if (free && mt > pet.dur) {
           if (pet.willSleep) setMode('sleep', { dur: rnd(8, 12) });
@@ -747,7 +778,7 @@ export function createPet(els, opts) {
     const gesture = pet.pulse ? { kind: pet.pulse.kind, k: clamp((T - pet.pulse.t0) / pet.pulse.dur, 0, 1) } : null;
     custom.draw(petG, face, {
       look: pet.look, legs, low: pet.low, t: T, blink, eyeClose, acc: skin, swing: pet.swing,
-      face: fname, mode: pet.mode, modeT: pet.modeT, talk: pet.talkK, status: pet.status, drowse: pet.drowse, sit: pet.sitK, facing: pet.faceVis, tilt: pet.tilt, lean, groupRot: rot, gesture,
+      face: fname, mode: pet.mode, modeT: pet.modeT, talk: pet.talkK, status: pet.status, drowse: pet.drowse, sit: pet.sitK, facing: pet.faceVis, tilt: pet.tilt, lean, groupRot: rot, gesture, work,
     });
 
     const footY = drag ? pet.dy + 220 * S * 1.09 : pet.fy;
@@ -966,6 +997,7 @@ export function createPet(els, opts) {
     setStatus(kind) { pet.status = typeof kind === 'string' ? kind : null; },
     /** The page shows the bot's thinking in a bubble of its own. */
     setThoughtShown(on) { pet.thoughtShown = on; },
+    setWork,
     anchor,
     emitHeart,
   };
@@ -995,8 +1027,19 @@ const SVGNS = 'http://www.w3.org/2000/svg';
  * null, or a target it does not name, answers the move `busy`.
  *
  * The body takes these calls from the page: step(dt, draw), layout(), do(word), walk(x, run, id), stopWalk(id), pointer(type, p),
- * drop(p), shift(dx, dy), place(x, facing, y), move(args, id), set({ roam, hold, dialogOpen, still, listening, thinking, thoughtShown, status, skin, theme }),
+ * drop(p), shift(dx, dy), place(x, facing, y), move(args, id), set({ roam, hold, dialogOpen, still, listening, thinking, thoughtShown, status, work, skin, theme }),
  * cue(kind), talk(), setScheme(id, o), dispose(); `words` lists every word its do() knows.
+ *
+ * `work` is work mode, or null when it is off (the page's desk, web/work-desk.js; the README's 形象包 section):
+ * `{ phase, hand, taps, held, mouse, password, desk }`. `phase`: `enter` while the props come out around the standing
+ * body, `on` while it sits at the desk, `leave` while they are packed away. `hand`: 'left' or 'right', the hand of the last
+ * key pressed, or null; `taps` counts the presses; `held` `{ left, right }` whether a key is held under each hand; `mouse`
+ * `{ dx, dy, buttons: { left, right, middle }, active }` the mouse's slide on the desk in logo units, its buttons, and
+ * whether the right hand is on it; `password` that a password is being typed (no presses come meanwhile); `desk` the
+ * desk in logo units (`top`, `front`, `keys: { x0, x1, y0, y1 }`, `mouse: [x, y]`, `rest: { left, right }`), screen right
+ * to +x: the page turns the body to face right before it sits. The kit sits the body down, keeps it there (motions that
+ * would take it off the chair and walks are refused), looks at the hands, shuts the eyes for a password and bounces a
+ * little with each press; the figure gets the same object as `frame.work`.
  */
 export function createBody(host, opts) {
   const doc = host.root.ownerDocument;
@@ -1061,6 +1104,7 @@ export function createBody(host, opts) {
       if (typeof s.thinking === 'boolean') ctl.setThinking(s.thinking);
       if (typeof s.thoughtShown === 'boolean') ctl.setThoughtShown(s.thoughtShown);
       if ('status' in s) ctl.setStatus(s.status);
+      if ('work' in s) ctl.setWork(s.work);
       if (s.skin) { ctl.setSkin(s.skin); if (opts.skinCss) skinStyle.textContent = opts.skinCss(s.skin); }
       if (s.theme) doc.documentElement.dataset.theme = s.theme;
     },

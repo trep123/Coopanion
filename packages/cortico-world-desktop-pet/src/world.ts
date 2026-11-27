@@ -1046,6 +1046,7 @@ export class DesktopPetWorld implements World {
       passWhenFullscreen: this.cfg.window.passWhenFullscreen,
       overTaskbar: this.cfg.window.overTaskbar,
       hideFromCapture: this.cfg.window.hideFromCapture,
+      work: this.cfg.window.work,
       clickThrough: this.clickThrough,
       language: this.appLanguage,
       user: this.userName,
@@ -1247,8 +1248,9 @@ export class DesktopPetWorld implements World {
     if (this.quiet && (patch.roam !== undefined || patch.sound !== undefined)) this.endQuiet();
     if (prefs.theme === 'dark' || prefs.theme === 'light') patch.theme = prefs.theme as PetTheme;
     const scale = scaleOf(prefs.scale), fade = fadeOf(prefs.fade), fullscreenFade = fadeOf(prefs.fullscreenFade);
-    if (scale !== null || fade !== null || fullscreenFade !== null) {
-      patch.window = { ...(scale !== null ? { scale } : {}), ...(fade !== null ? { fade } : {}), ...(fullscreenFade !== null ? { fullscreenFade } : {}) };
+    const work = typeof prefs.work === 'boolean' ? prefs.work : null;
+    if (scale !== null || fade !== null || fullscreenFade !== null || work !== null) {
+      patch.window = { ...(scale !== null ? { scale } : {}), ...(fade !== null ? { fade } : {}), ...(fullscreenFade !== null ? { fullscreenFade } : {}), ...(work !== null ? { work } : {}) };
     }
     if (prefs.cua === false) patch.cua = { enabled: false };
     // a page turns it on only after the person confirmed the risks in the settings window
@@ -1312,6 +1314,7 @@ export class DesktopPetWorld implements World {
         w.resolve(msg.t === 'arrived' ? (name === undefined ? t.walkArrived(at) : t.moveArrived(name, at))
           : w.stopping ? (name === undefined ? t.walkStopped(at) : t.moveStopped(name, at))
           : msg.by === 'drag' ? (name === undefined ? t.walkGrabbed(at, this.userName) : t.moveGrabbed(name, at, this.userName))
+          : msg.by === 'work' ? t.walkAtDesk(this.userName)
           : name === undefined ? t.walkReplaced(at, by) : t.moveFailed(name, at, by));
         return;
       }
@@ -2546,6 +2549,7 @@ export class DesktopPetWorld implements World {
       'pet.vocab': vocabTable(this.vocab(), language),
       'pet.moves': moveTable(this.moves(), language),
       'pet.voice': this.cfg.asr.enabled ? t.on : t.off,
+      'pet.work': this.cfg.window.work ? t.workOn(user) : '',
       'pet.body': this.bodyText(this.currentPack()),
       'pet.dress': dressTable(this.packs(), language),
       'pet.self': this.selfText(),

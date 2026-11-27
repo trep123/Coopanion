@@ -57,6 +57,8 @@ export default {
   'action.cuaOn': "Computersteuerung: an · klicken zum Ausschalten",
   'action.cuaOffAsk': "Computersteuerung: aus · klicken zum Einschalten im Einstellungsfenster",
   'action.cuaOff': "Computersteuerung: aus · klicken zum Einschalten",
+  'action.workOn': "Arbeitsmodus: an · klicken, um den Schreibtisch wegzuräumen",
+  'action.workOff': "Arbeitsmodus: aus · klicken, um einen Schreibtisch hervorzuholen und mitzutippen",
   'action.dress': 'Outfit',
   'action.worlds': 'Meine Worlds',
   'action.hide': 'Versteck mich erst mal (das Symbol im Infobereich holt mich zurück)',

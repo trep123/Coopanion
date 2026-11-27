@@ -98,7 +98,7 @@ describe('figure packs', () => {
     const m = readManifest(fileURLToPath(new URL('./fixtures/api2-pack/', import.meta.url)), false, skipped);
     if (typeof m === 'string') throw new Error(m);
     expect(skipped).toEqual([]);
-    expect(m).toMatchObject({ id: 'fixture-api2', api: 2, entry: 'figure.js', export: 'createFixtureBody', model: 'model.json', thumb: 'thumb.png', can: { walk: true }, moves: [], needs: [] });
+    expect(m).toMatchObject({ id: 'fixture-api2', api: 2, entry: 'figure.js', export: 'createFixtureBody', model: 'model.json', thumb: 'thumb.png', can: { walk: true, work: false }, moves: [], needs: [] });
     expect(m.vocab.map((w) => [w.id, w.kind, w.lasting ?? false])).toEqual([['happy', 'expression', false], ['sit', 'motion', true], ['salute', 'motion', false]]);
     expect(m.sounds).toEqual({ beep: { file: 'beep.wav', kind: 'touch', volume: .5 } });
     expect(m.axes.map((a) => [a.id, a.options.map((o) => o.id)])).toEqual([['tone', ['day', 'night']]]);
@@ -120,6 +120,14 @@ describe('figure packs', () => {
     for (const id of ['left', 'cursor', '0.5']) expect(readManifest(pack({ ...base, moves: [{ ...shelf, id }] }))).toMatch(/moves/);
     expect(readManifest(pack({ ...base, moves: [{ ...shelf, params: [{ id: 'height', about: { zh: '跳多高' }, min: 1, max: 1 }] }] }))).toMatch(/params/);
     expect(readManifest(pack({ ...base, moves: [{ ...shelf, params: [1, 2, 3].map((i) => ({ id: `p${i}`, about: { zh: '量' }, min: 0, max: 1 })) }] }))).toMatch(/params/);
+  });
+
+  it('reads whether a body draws its own hands at the desk, off unless it says so, a value it does not know named and left off', () => {
+    expect(readManifest(pack(base))).toMatchObject({ can: { walk: true, work: false } });
+    expect(readManifest(pack({ ...base, can: { work: true } }))).toMatchObject({ can: { walk: true, work: true } });
+    const skipped: string[] = [];
+    expect(readManifest(pack({ ...base, can: { work: 'yes' } }), false, skipped)).toMatchObject({ can: { work: false } });
+    expect(skipped).toEqual([expect.stringContaining('can.work')]);
   });
 
   it("reads a pack's voice, how far its effects reach and its bubbles' colours, leaving out values out of range or incomplete", () => {

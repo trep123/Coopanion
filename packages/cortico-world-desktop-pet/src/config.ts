@@ -13,7 +13,7 @@ export const DESKTOP_PET_ID = 'desktop-pet';
 export const USER_MAX = 20;
 
 /** The actions that can show as buttons beside the pet on hover, in their order; the right-click menu shows the same ones. */
-export const PET_ACTIONS = ['chat', 'voice', 'roam', 'theme', 'sound', 'hide', 'through', 'size', 'fade', 'dress', 'cua', 'worlds'] as const;
+export const PET_ACTIONS = ['chat', 'voice', 'roam', 'theme', 'sound', 'hide', 'through', 'size', 'fade', 'dress', 'cua', 'work', 'worlds'] as const;
 export type PetAction = typeof PET_ACTIONS[number];
 /** Most hover buttons. */
 export const MAX_HOVER_BUTTONS = 6;
@@ -216,6 +216,11 @@ export interface DesktopPetConfigSection extends WorldSection {
     hideFromCapture: boolean;
     /** Serve `/overlay`, the pet window's picture for an OBS browser source. */
     exportOverlay: boolean;
+    /**
+     * Work mode: the pet sits at a desk the page draws, its hands following the keyboard and the mouse
+     * (host/work-input.cjs, web/work-desk.js); the hover button `work` switches it.
+     */
+    work: boolean;
   };
   roam: RoamMode;
   /** All of the pet's sounds; `sounds` picks among them while this is on. */
@@ -339,7 +344,7 @@ export const DESKTOP_PET_DEFAULTS: DesktopPetConfigSection = {
   enabled: false,
   port: 7797,
   user: '',
-  window: { enabled: true, electronFile: '', scale: 1, bubbleSize: 1, fontSize: 1, bubbleSpeed: 1, sayBubbleHoldSec: 0, glow: GLOW_DEFAULT, frameRate: 60, lockFrameRate: false, motion: 'system', fade: 0, fadeWhenFullscreen: false, fullscreenFade: 40, hideWhenFullscreen: false, passWhenFullscreen: false, overTaskbar: true, hideFromCapture: false, exportOverlay: false },
+  window: { enabled: true, electronFile: '', scale: 1, bubbleSize: 1, fontSize: 1, bubbleSpeed: 1, sayBubbleHoldSec: 0, glow: GLOW_DEFAULT, frameRate: 60, lockFrameRate: false, motion: 'system', fade: 0, fadeWhenFullscreen: false, fullscreenFade: 40, hideWhenFullscreen: false, passWhenFullscreen: false, overTaskbar: true, hideFromCapture: false, exportOverlay: false, work: false },
   roam: 'calm',
   sound: true,
   sounds: { move: true, touch: true, face: true, snore: true, talk: true, ui: true, alert: true, snoreSeconds: 0, panByPosition: true, volume: 100 },
@@ -424,6 +429,7 @@ export function desktopPetConfigGroups(language: Language = 'zh'): ConfigGroup[]
           [`${K}.window.hideFromCapture`]: { type: 'boolean', title: c.hideFromCapture.title, description: c.hideFromCapture.description, 'x-hot': true },
         } : {}),
         [`${K}.window.exportOverlay`]: { type: 'boolean', title: c.exportOverlay.title, description: c.exportOverlay.description, 'x-hot': true },
+        [`${K}.window.work`]: { type: 'boolean', title: c.work.title, description: c.work.description, 'x-hot': true },
         [`${K}.window.electronFile`]: { type: 'string', title: c.electronFile.title, description: c.electronFile.description, 'x-path': { kind: 'file' }, 'x-hot': false },
         [`${K}.port`]: { type: 'integer', title: c.port.title, minimum: 1024, maximum: 65535, description: c.port.description, 'x-hot': false },
         [`${K}.touch.enabled`]: { type: 'boolean', title: c.touchEnabled.title, description: c.touchEnabled.description, 'x-hot': true },

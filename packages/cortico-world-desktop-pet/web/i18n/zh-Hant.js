@@ -57,6 +57,8 @@ export default {
   'action.cuaOn': "電腦操作：已開啟 · 點一下關閉",
   'action.cuaOffAsk': "電腦操作：已關閉 · 點一下在設定視窗開啟",
   'action.cuaOff': "電腦操作：已關閉 · 點一下開啟",
+  'action.workOn': "工作模式：已開啟 · 點一下收起桌子",
+  'action.workOff': "工作模式：已關閉 · 點一下拿出桌子，跟著你打字",
   'action.dress': '裝扮',
   'action.worlds': '我的 World',
   'action.hide': '先把我藏起來（系統匣裡可以叫我回來）',

@@ -57,6 +57,8 @@ export default {
   'action.cuaOn': "Uso do computador: ligado · clique para desligar",
   'action.cuaOffAsk': "Uso do computador: desligado · clique para ligar na janela de configurações",
   'action.cuaOff': "Uso do computador: desligado · clique para ligar",
+  'action.workOn': "Modo trabalho: ligado · clique para guardar a mesa",
+  'action.workOff': "Modo trabalho: desligado · clique para pegar uma mesa e digitar junto com você",
   'action.dress': 'Guarda-roupa',
   'action.worlds': 'Meus Worlds',
   'action.hide': 'Me esconda por enquanto (o ícone da bandeja me traz de volta)',

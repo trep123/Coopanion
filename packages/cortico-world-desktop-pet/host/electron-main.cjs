@@ -31,6 +31,7 @@ const { createOverlaySource } = require('./overlay.cjs');
 const { capturePortrait } = require('./portrait.cjs');
 const { createWindowSource, ledgesFrom, windowsFrom } = require('./windows.cjs');
 const { createIconSource, iconsFrom } = require('./icons.cjs');
+const { createWorkInput } = require('./work-input.cjs');
 const { createAppStoreRule } = require('./app-store.cjs');
 const { watchRenderer } = require('./renderer-gone.cjs');
 
@@ -59,6 +60,8 @@ const WINDOWS_EVERY_MS = 700;
  * them are read each time, the icons themselves at most every ICONS_CACHE_MS (host/icons.cjs).
  */
 const ICONS_EVERY_MS = 1000;
+/** Milliseconds between the reads of the keyboard and the mouse while work mode is on (host/work-input.cjs): about 60 a second. */
+const WORK_EVERY_MS = 16;
 /**
  * Milliseconds between the reads of the foreground window on Windows, for the topmost assertion and the
  * check for a fullscreen window covering the pet's display.
@@ -411,6 +414,30 @@ function runPetHost({ url, parentPid = 0, tray: withTray = true }) {
     sentIcons = '';
     if (on && icons.available) { iconTimer = setInterval(readIcons, ICONS_EVERY_MS); readIcons(); }
   };
+  // work mode's keyboard and mouse (host/work-input.cjs), read only while the page asks, the window is shown and its
+  // renderer runs, and no fullscreen window covers its display (`workCovered`, from the foreground check); the page
+  // hears `{ paused, keys }` each time that changes, then the tracker's messages
+  const work = createWorkInput({ cursor: () => cursor?.read() ?? null });
+  let workTimer = null, workCovered = false, workPaused = null;
+  const readWork = () => {
+    const crashed = !win || win.webContents.isCrashed();
+    const paused = crashed || !win.isVisible() || workCovered;
+    if (paused !== workPaused) {
+      workPaused = paused;
+      work.reset();
+      if (!crashed) win.webContents.send('pet:work', { paused, keys: work.available.keys });
+    }
+    if (paused) return;
+    const msg = work.poll(Date.now());
+    if (msg) win.webContents.send('pet:work', msg);
+  };
+  const watchWork = (on) => {
+    clearInterval(workTimer);
+    workTimer = null;
+    workPaused = null;
+    work.reset();
+    if (on) { workTimer = setInterval(readWork, WORK_EVERY_MS); readWork(); }
+  };
 
   /** The display the window belongs on: the one it was moved to, or the primary display once that one is gone. */
   const display = () => screen.getAllDisplays().find((d) => d.id === displayId) ?? screen.getPrimaryDisplay();
@@ -501,7 +528,7 @@ function runPetHost({ url, parentPid = 0, tray: withTray = true }) {
     });
     // a page loaded afresh asks for the windows again once its body is on
     win.webContents.on('did-finish-load', () => {
-      win.webContents.setZoomLevel(0); overlay.pageLoaded(); watchWindows(false); watchIcons(false); win.webContents.send('pet:floor', coverArea(display(), overTaskbar).below);
+      win.webContents.setZoomLevel(0); overlay.pageLoaded(); watchWindows(false); watchIcons(false); watchWork(false); win.webContents.send('pet:floor', coverArea(display(), overTaskbar).below);
       // a page loaded afresh lends no clicks until it says so
       if (clicksLent) { clicksLent = false; lockMouse(); }
       win.webContents.send('pet:fullscreenThrough', fullscreenThrough);
@@ -534,7 +561,9 @@ function runPetHost({ url, parentPid = 0, tray: withTray = true }) {
     const foregroundTimer = foreground && setInterval(() => {
       if (!win) return;
       const own = hwndOf(win), cur = foreground.current();
-      const covered = (hideWhenFullscreen || passWhenFullscreen || fadeWhenFullscreen) && !!fullscreen?.(cur, own);
+      const full = (hideWhenFullscreen || passWhenFullscreen || fadeWhenFullscreen || !!workTimer) && !!fullscreen?.(cur, own);
+      const covered = (hideWhenFullscreen || passWhenFullscreen || fadeWhenFullscreen) && full;
+      workCovered = !!workTimer && full;
       if (covered && hideWhenFullscreen && !autoHidden && win.isVisible()) { autoHidden = true; win.hide(); }
       else if (!(covered && hideWhenFullscreen) && autoHidden) { autoHidden = false; win.showInactive(); }
       const through = covered && passWhenFullscreen;
@@ -546,7 +575,7 @@ function runPetHost({ url, parentPid = 0, tray: withTray = true }) {
       lastForeground = cur;
       if (cur !== own) win.setAlwaysOnTop(true, level);
     }, FOREGROUND_EVERY_MS);
-    win.on('closed', () => { appStore?.stop(); clearInterval(cursorTimer); clearInterval(foregroundTimer); watchWindows(false); watchIcons(false); win = null; });
+    win.on('closed', () => { appStore?.stop(); clearInterval(cursorTimer); clearInterval(foregroundTimer); watchWindows(false); watchIcons(false); watchWork(false); win = null; });
     // page console lines reach the World's log through stdout
     win.webContents.on('console-message', (e) => { if (e.level !== 'debug') console.log(`[page:${e.level}] ${e.message}`); });
     win.webContents.on('did-fail-load', (_e, code, desc, failedUrl) => console.log(`[page:error] 加载失败 ${code} ${desc} ${failedUrl}`));
@@ -601,6 +630,7 @@ function runPetHost({ url, parentPid = 0, tray: withTray = true }) {
   onPet('pet:lendClicks', (_e, on) => { clicksLent = !!on; lockMouse(); });
   onPet('pet:watchWindows', (_e, on) => watchWindows(!!on));
   onPet('pet:watchIcons', (_e, on) => watchIcons(!!on));
+  onPet('pet:watchWork', (_e, on) => watchWork(!!on));
   onPet('pet:openDress', () => openDress());
   let language = 'zh';
   onPet('pet:language', (_e, code) => {

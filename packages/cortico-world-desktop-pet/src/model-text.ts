@@ -195,6 +195,10 @@ const zh = {
   /** `{{pet.cua}}` while computer use is off on a system that runs it. */
   cuaOff: (user: string, canOpen: boolean) => `## 电脑操作\n\n电脑操作现在关着:你看不到屏幕,也动不了鼠标和键盘。${user}想让你看屏幕或帮忙操作电脑时,可以提出打开它:在设置窗口「习惯」页的「电脑操作」一节,打开前那里会讲清风险。` +
     (canOpen ? `${user}同意去打开的话,\`pet_cua_open_settings\` 把设置窗口直接打开到那里。` : ''),
+  /** `{{pet.work}}` while work mode is on. */
+  workOn: (user: string) => `现在是工作模式:身体坐在一张桌子前，双手跟着${user}的键盘和鼠标动(你收不到按了什么键)。${user}多半在忙;身体待在桌前不走动,\`pet_move_to\` 会被拒绝，离开座位的动作也做不了，表情和点头、挥手照常。工作模式由${user}用悬停按钮或右键菜单开关。`,
+  /** A walk refused because the body sits at the desk of work mode. */
+  walkAtDesk: (user: string) => `没走:身体正坐在工作模式的桌前，等${user}关掉工作模式才能走动。`,
   /** The receipt of `pet_cua_open_settings`. */
   cuaSettingsOpened: (user: string) => `设置窗口已打开到「电脑操作」,正弹着风险说明;${user}点「打开」之后,下一条消息起你就能用电脑操作的工具。`,
   /** `{{pet.reply}}`: the language to talk to the person in, named by the app. */
@@ -337,6 +341,8 @@ const en: typeof zh = {
   chatPage: (user) => ` The app's Chat page lists these bubbles in time order, with what ${user} said and the names of the tools you called between two lines; ${user} can also type and send images there (they arrive as \`[typed]\` events too, images after the text) and answer \`pet_ask\`. The \`images\` of \`pet_say\` show only on the Chat page, not in the bubble.`,
   cuaOff: (user, canOpen) => `## Computer use\n\nComputer use is off: you cannot see the screen or use the mouse and keyboard. When ${user} wants you to look at the screen or help operate the computer, you can suggest turning it on: the Computer use section of the Habits page in the settings window, which explains the risks before it turns on.` +
     (canOpen ? ` If ${user} agrees to turn it on, \`pet_cua_open_settings\` opens the settings window right there.` : ''),
+  workOn: (user) => ` Work mode is on: the body sits at a desk and its hands follow ${user}'s keyboard and mouse (you get nothing of what is typed). ${user} is probably busy; the body stays at the desk, \`pet_move_to\` is refused and motions that leave the chair do not play, while faces, nods and waves do. ${user} switches work mode with a hover button or the right-click menu.`,
+  walkAtDesk: (user) => `Did not walk: the body sits at the desk of work mode and walks again once ${user} turns work mode off.`,
   cuaSettingsOpened: (user) => `The settings window is open at Computer use, showing what it risks; once ${user} clicks to turn it on, the computer-use tools are yours from the next message.`,
   reply: (user, language) => ` Talk to ${user} in ${language}: bubbles, questions and options alike.`,
 };

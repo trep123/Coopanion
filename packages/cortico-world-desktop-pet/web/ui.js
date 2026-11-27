@@ -135,6 +135,8 @@ export const ICONS = {
   // a screen with a pointer on it: computer use, and struck through while it is off
   computer: icon('<rect x="3" y="4" width="18" height="12.5" rx="2"/><path d="M8.5 20.5h7M12 16.5v4"/><path d="m10 7.5 1.6 5.2 1.1-2 2.1-1.1z"/>'),
   computerOff: icon('<rect x="3" y="4" width="18" height="12.5" rx="2"/><path d="M8.5 20.5h7M12 16.5v4"/><path d="m10 7.5 1.6 5.2 1.1-2 2.1-1.1z"/><path d="M4 3l16 16"/>'),
+  // a desk with a keyboard on it: work mode
+  work: icon('<path d="M2.5 13.5h19M5 13.5v7M19 13.5v7"/><path d="M6.5 10.5 7.5 7h9l1 3.5z"/><path d="M15.5 8.5h.01M12 8.5h.01M8.5 8.5h.01"/>'),
   // a T-shirt: the dressing page
   shirt: icon('<path d="M8.5 3.5 4 6l-1.5 4.5L6 12v8.5h12V12l3.5-1.5L20 6l-4.5-2.5a3.5 3.5 0 0 1-7 0z"/>'),
   eye: icon('<path d="M3 12s3.2-6 9-6 9 6 9 6-3.2 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="3"/>'),

@@ -109,6 +109,31 @@ body.desk .floor{display:none}
 .figure-layer .figure-clip{position:absolute; inset:0; pointer-events:none}
 .figure-layer iframe{position:absolute; inset:0; width:100%; height:100%; border:0; background:transparent; color-scheme:normal; pointer-events:none}
 
+/* work mode's props (work-desk.js): the chair under the body, the desk, keyboard, mouse and paws over it; never under the
+   pointer. They come out one after another, each growing from its bottom (--work-in, which pet-app.js waits for), and
+   are packed away shrinking (--work-out); at medium they grow without overshoot, at low they appear and go at once */
+:root{--work-in:520ms; --work-out:220ms;
+  --work-wood:#D8B48A; --work-wood-line:#8A6440; --work-panel:#C49A6C; --work-device:#F7F6FA; --work-key:#D9D6E0; --work-paw:#FFFFFF}
+:root[data-theme="dark"]{--work-wood:#7A5A3E; --work-wood-line:#4A3424; --work-panel:#664A32; --work-device:#2A303A; --work-key:#434B57; --work-paw:#F1EEF6}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--work-wood:#7A5A3E; --work-wood-line:#4A3424; --work-panel:#664A32; --work-device:#2A303A; --work-key:#434B57; --work-paw:#F1EEF6}}
+.work{position:absolute; pointer-events:none}
+.work svg{position:absolute; inset:0; width:100%; height:100%; overflow:visible; display:block}
+.work .w-part{transform-box:fill-box; transform-origin:50% 100%}
+.work .w-wood{fill:var(--work-wood); stroke:var(--work-wood-line); stroke-width:3; stroke-linejoin:round}
+.work .w-panel{fill:var(--work-panel); stroke:var(--work-wood-line); stroke-width:3}
+.work .w-post{fill:none; stroke:var(--work-wood-line); stroke-width:7; stroke-linecap:round}
+.work .w-knob{fill:var(--work-wood); stroke:var(--work-wood-line); stroke-width:3}
+.work .w-device{fill:var(--work-device); stroke:var(--skin-ink); stroke-width:2.4; stroke-linejoin:round}
+.work .w-key{fill:var(--work-key)}
+.work .w-key.lit, .work .w-button.lit{fill:var(--skin-eye)}
+.work .w-button{fill:var(--work-key); stroke:var(--skin-ink); stroke-width:1}
+.work .w-paw ellipse{fill:var(--work-paw); stroke:var(--skin-ink); stroke-width:4}
+.work .w-paw path{fill:none; stroke:var(--skin-ink); stroke-width:2; stroke-linecap:round; opacity:.5}
+.work.entering .w-part{animation:work-in calc(var(--work-in) - 4 * 60ms) var(--motion-pop) both; animation-delay:calc(var(--i) * 60ms)}
+.work.leaving .w-part{animation:work-out var(--work-out) ease-in forwards}
+@keyframes work-in{from{transform:scale(.1); opacity:0}}
+@keyframes work-out{to{transform:scale(.1); opacity:0}}
+
 
 /* activity borrows the speech bubble, but never takes the pointer or competes with dialogue */
 .bubble.status{

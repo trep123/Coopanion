@@ -57,6 +57,8 @@ export default {
   'action.cuaOn': "컴퓨터 사용: 켜짐 · 클릭하여 끄기",
   'action.cuaOffAsk': "컴퓨터 사용: 꺼짐 · 클릭하여 설정 창에서 켜기",
   'action.cuaOff': "컴퓨터 사용: 꺼짐 · 클릭하여 켜기",
+  'action.workOn': "작업 모드: 켜짐 · 클릭해서 책상 치우기",
+  'action.workOff': "작업 모드: 꺼짐 · 클릭해서 책상을 꺼내 함께 타이핑하기",
   'action.dress': '꾸미기',
   'action.worlds': '내 World',
   'action.hide': '저를 잠시 숨기기(트레이 아이콘으로 다시 불러낼 수 있습니다)',

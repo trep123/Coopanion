@@ -57,6 +57,8 @@ export default {
   'action.cuaOn': "Contrôle de l'ordinateur : activé · cliquez pour désactiver",
   'action.cuaOffAsk': "Contrôle de l'ordinateur : désactivé · cliquez pour l'activer dans la fenêtre des réglages",
   'action.cuaOff': "Contrôle de l'ordinateur : désactivé · cliquez pour l'activer",
+  'action.workOn': "Mode travail : activé · cliquer pour ranger le bureau",
+  'action.workOff': "Mode travail : désactivé · cliquer pour sortir un bureau et taper avec vous",
   'action.dress': 'Habiller',
   'action.worlds': 'Mes Worlds',
   'action.hide': "Me cacher pour l'instant (l'icône de la zone de notification me fait revenir)",

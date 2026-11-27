@@ -57,6 +57,8 @@ export default {
   'action.cuaOn': "コンピューター操作：オン · クリックでオフ",
   'action.cuaOffAsk': "コンピューター操作：オフ · クリックで設定ウィンドウからオン",
   'action.cuaOff': "コンピューター操作：オフ · クリックでオン",
+  'action.workOn': "作業モード：オン · クリックで机を片づける",
+  'action.workOff': "作業モード：オフ · クリックで机を出して一緒にタイピング",
   'action.dress': '着せ替え',
   'action.worlds': '自分の World',
   'action.hide': 'しばらく隠れる（トレイアイコンで呼び戻せます）',
