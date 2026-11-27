@@ -1039,7 +1039,9 @@ const SVGNS = 'http://www.w3.org/2000/svg';
  * desk in logo units (`top`, `front`, `keys: { x0, x1, y0, y1 }`, `mouse: [x, y]`, `rest: { left, right }`), screen right
  * to +x: the page turns the body to face right before it sits. The kit sits the body down, keeps it there (motions that
  * would take it off the chair and walks are refused), looks at the hands, shuts the eyes for a password and bounces a
- * little with each press; the figure gets the same object as `frame.work`.
+ * little with each press; the figure gets the same object as `frame.work`. For a pack that says `can.work` the page draws
+ * the desk's top, keyboard and mouse under the body (its front edge and panel stay over it): such a figure hides what of
+ * itself lies below `desk.top` and draws its hands on the keyboard and the mouse.
  */
 export function createBody(host, opts) {
   const doc = host.root.ownerDocument;

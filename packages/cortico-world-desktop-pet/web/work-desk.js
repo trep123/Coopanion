@@ -47,7 +47,10 @@ function keyRect(hand, row, col) {
   return { x: mid - half + c * w + (hand === 'right' ? 1.5 : -1.5), y: k.y0 + 2 + row * rowH, w, h: rowH };
 }
 
-/** The desk's top as a band seen a little from above, its front edge, its front panel and its legs. */
+/**
+ * The desk in two layers: `top`, its top as a band seen a little from above with the keyboard and the mouse on it; `front`,
+ * its front edge, its front panel and its legs.
+ */
 function deskMarkup() {
   const { top, front, x0, x1, keys: k } = DESK;
   const inset = 14;
@@ -60,11 +63,8 @@ function deskMarkup() {
       }
     }
   }
-  return `<g class="w-part w-desk" style="--i:1">
+  return { top: `<g class="w-part w-desk" style="--i:1">
   <path class="w-wood" d="M${x0 + inset} ${top}H${x1 - inset}L${x1} ${front}H${x0}Z"/>
-  <rect class="w-wood w-edge" x="${x0}" y="${front}" width="${x1 - x0}" height="9" rx="3"/>
-  <rect class="w-panel" x="${x0 + 12}" y="${front + 9}" width="${x1 - x0 - 24}" height="28"/>
-  <path class="w-post" d="M${x0 + 10} ${front + 9}V254M${x1 - 10} ${front + 9}V254"/>
 </g>
 <g class="w-part w-keyboard" style="--i:2">
   <path class="w-device" d="M${k.x0 + 5} ${k.y0}H${k.x1 - 5}L${k.x1} ${k.y1}H${k.x0}Z"/>
@@ -75,7 +75,11 @@ function deskMarkup() {
   <path class="w-button" data-b="left" d="M${DESK.mouse[0] - 8} ${DESK.mouse[1] - 4}a8 9 0 0 1 7.5-8.9V${DESK.mouse[1] - 1}H${DESK.mouse[0] - 8}z"/>
   <path class="w-button" data-b="right" d="M${DESK.mouse[0] + 8} ${DESK.mouse[1] - 4}a8 9 0 0 0-7.5-8.9V${DESK.mouse[1] - 1}H${DESK.mouse[0] + 8}z"/>
   <rect class="w-button" data-b="middle" x="${DESK.mouse[0] - 1.3}" y="${DESK.mouse[1] - 11}" width="2.6" height="6" rx="1.3"/>
-</g></g>`;
+</g></g>`, front: `<g class="w-part w-desk" style="--i:1">
+  <rect class="w-wood w-edge" x="${x0}" y="${front}" width="${x1 - x0}" height="9" rx="3"/>
+  <rect class="w-panel" x="${x0 + 12}" y="${front + 9}" width="${x1 - x0 - 24}" height="28"/>
+  <path class="w-post" d="M${x0 + 10} ${front + 9}V254M${x1 - 10} ${front + 9}V254"/>
+</g>` };
 }
 
 /** The two paws, each a round pad with two creases; `.down` presses one onto what it rests on. */
@@ -98,7 +102,8 @@ function layer(doc, cls, inner) {
 }
 
 /**
- * Builds the props into `stage`, the chair before `figureLayer` (under the body) and the rest after it (over the body).
+ * Builds the props into `stage`, the chair before `figureLayer` (under the body) and the desk after it (over the body);
+ * the desk's top, keyboard and mouse go under the body instead while `draw` is told the pack draws its own hands.
  * `enterMs()` is the length of the coming out (0 at low motion). Returns:
  * `show()`, `hide(ms)` (packed away over `ms`, at once when 0), `hidden`, `place(x, floorY, S)` (the body's middle and
  * floor in stage pixels, and its scale), `draw(view, paws)` (a `createWorkHands` view; `paws` false hides the page's paws
@@ -106,17 +111,21 @@ function layer(doc, cls, inner) {
  */
 export function createWorkDesk(stage, figureLayer, { enterMs = () => 0 } = {}) {
   const doc = stage.ownerDocument;
+  const markup = deskMarkup();
   const back = layer(doc, 'work-back', CHAIR);
-  const front = layer(doc, 'work-front', deskMarkup() + PAWS);
+  const top = layer(doc, 'work-top', markup.top);
+  const front = layer(doc, 'work-front', markup.front + PAWS);
   stage.insertBefore(back, figureLayer);
-  figureLayer.after(front);
-  const shows = [back, front].map((el) => showHide(el, { enterMs }));
-  const keys = new Map([...front.querySelectorAll('.w-key')].map((el) => [el.dataset.k, el]));
-  const buttons = Object.fromEntries([...front.querySelectorAll('.w-button')].map((el) => [el.dataset.b, el]));
-  const mouseBody = front.querySelector('.w-mouse-body');
+  figureLayer.after(top, front);
+  /** Whether the desk's top is under the body: for a pack that draws its own hands on it (`draw`'s `ownPaws`). */
+  let topUnder = false;
+  const shows = [back, top, front].map((el) => showHide(el, { enterMs }));
+  const keys = new Map([...top.querySelectorAll('.w-key')].map((el) => [el.dataset.k, el]));
+  const buttons = Object.fromEntries([...top.querySelectorAll('.w-button')].map((el) => [el.dataset.b, el]));
+  const mouseBody = top.querySelector('.w-mouse-body');
   const paws = front.querySelector('.w-paws');
   const paw = Object.fromEntries([...front.querySelectorAll('.w-paw')].map((el) => [el.dataset.hand, el]));
-  let placed = '', drawn = { lit: new Set(), buttons: '', mouse: '', paws: '' };
+  let placed = '', drawn = { lit: new Set(), buttons: '', mouse: '', paws: null };
   return {
     get hidden() { return shows[0].hidden; },
     show() { for (const s of shows) s.show(); },
@@ -126,10 +135,12 @@ export function createWorkDesk(stage, figureLayer, { enterMs = () => 0 } = {}) {
       if (at === placed) return;
       placed = at;
       const box = { left: `${f(x + (VIEW[0] - 128) * S)}px`, top: `${f(floorY + (VIEW[1] - 256) * S)}px`, width: `${f(VIEW[2] * S)}px`, height: `${f(VIEW[3] * S)}px` };
-      Object.assign(back.style, box);
-      Object.assign(front.style, box);
+      for (const el of [back, top, front]) Object.assign(el.style, box);
     },
     draw(view, ownPaws) {
+      // a pack that draws its own hands gets the desk's top under its body, the front still over it: the body hides
+      // what of itself is below the desk's back edge, and its hands lie on the keyboard and the mouse
+      if (!!ownPaws !== topUnder) { topUnder = !!ownPaws; if (topUnder) figureLayer.before(top); else figureLayer.after(top); }
       const lit = new Set(view.lit.map((l) => `${l.hand}-${l.row}-${l.col}`));
       for (const k of drawn.lit) if (!lit.has(k)) keys.get(k)?.classList.remove('lit');
       for (const k of lit) if (!drawn.lit.has(k)) keys.get(k)?.classList.add('lit');
@@ -160,6 +171,6 @@ export function createWorkDesk(stage, figureLayer, { enterMs = () => 0 } = {}) {
         drawn.paws = pk;
       }
     },
-    dispose() { back.remove(); front.remove(); },
+    dispose() { back.remove(); top.remove(); front.remove(); },
   };
 }
