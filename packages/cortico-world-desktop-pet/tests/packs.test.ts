@@ -122,9 +122,11 @@ describe('figure packs', () => {
     expect(readManifest(pack({ ...base, moves: [{ ...shelf, params: [1, 2, 3].map((i) => ({ id: `p${i}`, about: { zh: '量' }, min: 0, max: 1 })) }] }))).toMatch(/params/);
   });
 
-  it('reads whether a body draws its own hands at the desk, off unless it says so, a value it does not know named and left off', () => {
+  it('reads whether a body draws its own hands at the desk or the whole scene, off unless it says so, a value it does not know named and left off', () => {
     expect(readManifest(pack(base))).toMatchObject({ can: { walk: true, work: false } });
     expect(readManifest(pack({ ...base, can: { work: true } }))).toMatchObject({ can: { walk: true, work: true } });
+    // a body that draws the whole scene, desk and all
+    expect(readManifest(pack({ ...base, can: { work: 'scene' } }))).toMatchObject({ can: { walk: true, work: 'scene' } });
     const skipped: string[] = [];
     expect(readManifest(pack({ ...base, can: { work: 'yes' } }), false, skipped)).toMatchObject({ can: { work: false } });
     expect(skipped).toEqual([expect.stringContaining('can.work')]);

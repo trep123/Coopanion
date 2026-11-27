@@ -126,6 +126,9 @@ const EDGE_INSET = 8;
  * set it (createBody's `set`), or null.
  * `figure.groupTilt(mode, tilt, lean)`, if present, returns the rotation (degrees) the whole group gets
  * instead of tilt + lean; the frame carries tilt, lean and that rotation (groupRot) so the figure can bend the rest.
+ * `figure.groupScale(mode)`, if present, returns how much (0..1) of the squash, stretch and breathing the whole group
+ * gets (1 when absent): 0 keeps the group at its size, for a figure that breathes its own parts and draws things that
+ * should hold still, such as a desk.
  * `figure.colors.z`, if present, colours the sleep z's (otherwise they take the `eye` class).
  * `figure.gestures`, if present, names the short gestures (nod, shake) the figure draws itself: the body then
  * leaves them out, and the frame's `gesture` ({ kind, k: 0..1 }, or null) says which one is playing and how far.
@@ -746,8 +749,10 @@ export function createPet(els, opts) {
     const fc = pet._fc || FACES.neutral.f(0), fname = pet._fname || 'neutral';
     const drag = pet.mode === 'drag';
     const br = Math.sin(T * (pet.mode === 'sleep' ? 1.7 : 2.4));
-    const sx = (1 + pet.sq * .7) * (1 - .05 * pet.stretch) * (1 - .009 * br);
-    const sy = (1 - pet.sq) * (1 + .09 * pet.stretch) * (1 + .016 * br);
+    // a figure may keep the squash and the breathing off the whole group (a desk it draws should not breathe)
+    const gs = custom?.groupScale ? clamp(Number(custom.groupScale(pet.mode)) || 0, 0, 1) : 1;
+    const sx = 1 + ((1 + pet.sq * .7) * (1 - .05 * pet.stretch) * (1 - .009 * br) - 1) * gs;
+    const sy = 1 + ((1 - pet.sq) * (1 + .09 * pet.stretch) * (1 + .016 * br) - 1) * gs;
     const ax = 128, ay = drag ? 36 : 256;
     let AX = drag ? pet.dx : pet.x, AY = drag ? pet.dy : pet.fy;
     if (fc.shake) AX += Math.sin(T * 60) * 1.4;
@@ -1041,7 +1046,9 @@ const SVGNS = 'http://www.w3.org/2000/svg';
  * would take it off the chair and walks are refused), looks at the hands, shuts the eyes for a password and bounces a
  * little with each press; the figure gets the same object as `frame.work`. For a pack that says `can.work` the page draws
  * the desk's top, keyboard and mouse under the body (its front edge and panel stay over it): such a figure hides what of
- * itself lies below `desk.top` and draws its hands on the keyboard and the mouse.
+ * itself lies below `desk.top` and draws its hands on the keyboard and the mouse. For a pack that says `can.work: 'scene'`
+ * the page draws no props at all: the figure draws its own desk, keyboard, mouse and hands. `ms` `{ enter, leave }` is how
+ * long the `enter` and `leave` phases last in milliseconds (0 at low motion), for a figure that brings out its own desk.
  */
 export function createBody(host, opts) {
   const doc = host.root.ownerDocument;

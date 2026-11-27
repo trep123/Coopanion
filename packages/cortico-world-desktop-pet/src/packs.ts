@@ -149,10 +149,12 @@ export interface FigureManifest {
   /** Its own sound files by name; the body asks for them, the page plays them. */
   sounds: Record<string, PackSound>;
   /**
-   * `walk`: whether it walks to the default targets of `pet_move_to`. `work`: whether its body draws its own hands at
-   * work mode's desk (the figure's `frame.work`, web/kit/body.js); without it the page draws a pair of paws that type.
+   * `walk`: whether it walks to the default targets of `pet_move_to`. `work`: how its body takes part in work mode
+   * (the figure's `frame.work`, web/kit/body.js): `false`, the page draws the props and a pair of paws that type;
+   * `true`, the page draws the props and the body its own hands; `'scene'`, the body draws the whole scene (its own
+   * desk, keyboard, mouse and hands) and the page draws no props at all.
    */
-  can: { walk: boolean; work: boolean };
+  can: { walk: boolean; work: boolean | 'scene' };
   moves: MoveTarget[];
   /** What the page passes its body beyond the stage's size (`host.bounds()`); the window reads none of it for a pack that does not ask. */
   needs: Array<typeof PACK_NEEDS[number]>;
@@ -349,7 +351,7 @@ export function readManifest(dir: string, builtin = false, skipped: string[] = [
   if (typeof sounds === 'string') return sounds;
   const can = (raw.can ?? {}) as Record<string, unknown>;
   if (can.walk !== undefined && typeof can.walk !== 'boolean') skipped.push(t.badWalk(JSON.stringify(can.walk)));
-  if (can.work !== undefined && typeof can.work !== 'boolean') skipped.push(t.badWork(JSON.stringify(can.work)));
+  if (can.work !== undefined && typeof can.work !== 'boolean' && can.work !== 'scene') skipped.push(t.badWork(JSON.stringify(can.work)));
   const moves = readMoves(raw.moves, t);
   if (typeof moves === 'string') return moves;
   const needs = readNeeds(raw.needs, skipped, t);
@@ -359,7 +361,7 @@ export function readManifest(dir: string, builtin = false, skipped: string[] = [
   const bubble = bubbleOf(raw.bubble);
   return {
     manifest: MANIFEST_VERSION, api: raw.api as number, id: raw.id, version: typeof raw.version === 'string' ? raw.version : '0.0.0',
-    name, about, entry: raw.entry, export: raw.export, axes, presets, vocab, sounds, can: { walk: can.walk !== false, work: can.work === true }, moves, needs, voice, effects,
+    name, about, entry: raw.entry, export: raw.export, axes, presets, vocab, sounds, can: { walk: can.walk !== false, work: can.work === 'scene' ? 'scene' : can.work === true }, moves, needs, voice, effects,
     ...(bubble ? { bubble } : {}),
     ...(typeof raw.author === 'string' ? { author: raw.author } : {}),
     ...(typeof raw.license === 'string' ? { license: raw.license } : {}),

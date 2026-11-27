@@ -277,3 +277,23 @@ describe('the hands at the desk', () => {
     expect(h.view(3)).toMatchObject({ lit: [], paused: true, keys: false });
   });
 });
+
+const desk = await import(new URL('../web/work-desk.js', import.meta.url).href) as {
+  chairFit(box: { x0: number; x1: number; y0: number } | null, minY?: number): { x0: number; x1: number; top: number };
+};
+
+describe('chairFit', () => {
+  it('keeps the chair as drawn behind a body as wide as it, and when the body names no box', () => {
+    expect(desk.chairFit({ x0: 20, x1: 236, y0: 12 })).toEqual({ x0: 44, x1: 212, top: 108 });
+    expect(desk.chairFit(null)).toEqual({ x0: 44, x1: 212, top: 108 });
+  });
+
+  it('keeps the posts inside a narrow body, so none sticks up beside it, and the knobs inside the stage', () => {
+    const c = desk.chairFit({ x0: 76, x1: 180, y0: 36 });
+    expect(c.x0).toBeGreaterThanOrEqual(76 + 12);
+    expect(c.x1).toBeLessThanOrEqual(180 - 12);
+    expect(c.x0).toBeLessThan(c.x1);
+    expect(desk.chairFit({ x0: 120, x1: 136, y0: 200 }).top).toBeLessThanOrEqual(160);
+    expect(desk.chairFit({ x0: 20, x1: 236, y0: 12 }, 120).top).toBe(130);
+  });
+});

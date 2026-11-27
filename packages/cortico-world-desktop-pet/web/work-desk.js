@@ -28,9 +28,28 @@ const VIEW = [-56, 60, 368, 206];
 const SVGNS = 'http://www.w3.org/2000/svg';
 const f = (n) => Math.round(n * 10) / 10;
 
+/** The chair's back at its widest and tallest: posts at `x0` and `x1`, their knobs' middles at `top` (logo units). */
+const CHAIR_MAX = { x0: 44, x1: 212, top: 108 };
+/**
+ * Where the chair's two posts stand for a body whose box is `box` (`{ x0, x1, y0 }` in logo units, facing right; null
+ * for none): `{ x0, x1, top }`. The posts keep inside the body's sides, so they stay behind it and never stick up beside
+ * a body narrower than the chair; their knobs keep below the body's top and inside the stage (`minY`, the stage's top in
+ * logo units). A body as wide as the whole chair keeps it as drawn.
+ */
+export function chairFit(box, minY = -Infinity) {
+  const inset = 12;
+  let x0 = CHAIR_MAX.x0, x1 = CHAIR_MAX.x1, top = CHAIR_MAX.top;
+  if (box && Number.isFinite(box.x0) && Number.isFinite(box.x1)) {
+    x0 = Math.min(Math.max(x0, box.x0 + inset), 128 - inset);
+    x1 = Math.max(Math.min(x1, box.x1 - inset), 128 + inset);
+  }
+  if (box && Number.isFinite(box.y0)) top = Math.max(top, box.y0 + 24);
+  top = Math.min(Math.max(top, minY + 10), 160);
+  return { x0, x1, top };
+}
 /** The chair behind the body: two posts with knobs, and a back mostly hidden behind the body and the desk. */
 const CHAIR = `<g class="w-part w-chair" style="--i:0">
-  <rect class="w-wood" x="44" y="166" width="168" height="40" rx="10"/>
+  <rect class="w-wood w-seat" x="44" y="166" width="168" height="40" rx="10"/>
   <path class="w-post" d="M44 112V250M212 112V250"/>
   <circle class="w-knob" cx="44" cy="108" r="9"/><circle class="w-knob" cx="212" cy="108" r="9"/>
 </g>`;
@@ -105,8 +124,8 @@ function layer(doc, cls, inner) {
  * Builds the props into `stage`, the chair before `figureLayer` (under the body) and the desk after it (over the body);
  * the desk's top, keyboard and mouse go under the body instead while `draw` is told the pack draws its own hands.
  * `enterMs()` is the length of the coming out (0 at low motion). Returns:
- * `show()`, `hide(ms)` (packed away over `ms`, at once when 0), `hidden`, `place(x, floorY, S)` (the body's middle and
- * floor in stage pixels, and its scale), `draw(view, paws)` (a `createWorkHands` view; `paws` false hides the page's paws
+ * `show()`, `hide(ms)` (packed away over `ms`, at once when 0), `hidden`, `place(x, floorY, S, body)` (the body's middle and
+ * floor in stage pixels, its scale, and its box in stage pixels, which the chair's back keeps inside: `chairFit`), `draw(view, paws)` (a `createWorkHands` view; `paws` false hides the page's paws
  * for a pack that draws its own hands), and `dispose()`.
  */
 export function createWorkDesk(stage, figureLayer, { enterMs = () => 0 } = {}) {
@@ -125,12 +144,24 @@ export function createWorkDesk(stage, figureLayer, { enterMs = () => 0 } = {}) {
   const mouseBody = top.querySelector('.w-mouse-body');
   const paws = front.querySelector('.w-paws');
   const paw = Object.fromEntries([...front.querySelectorAll('.w-paw')].map((el) => [el.dataset.hand, el]));
-  let placed = '', drawn = { lit: new Set(), buttons: '', mouse: '', paws: null };
+  const chair = { seat: back.querySelector('.w-seat'), post: back.querySelector('.w-post'), knobs: [...back.querySelectorAll('.w-knob')] };
+  let placed = '', chairAt = '', drawn = { lit: new Set(), buttons: '', mouse: '', paws: null };
+  /** Fits the chair's back to the body (`chairFit`). */
+  function fitChair(c) {
+    const key = `${f(c.x0)},${f(c.x1)},${f(c.top)}`;
+    if (key === chairAt) return;
+    chairAt = key;
+    chair.seat.setAttribute('x', f(c.x0)); chair.seat.setAttribute('width', f(c.x1 - c.x0));
+    chair.post.setAttribute('d', `M${f(c.x0)} ${f(c.top + 4)}V250M${f(c.x1)} ${f(c.top + 4)}V250`);
+    chair.knobs.forEach((k, i) => { k.setAttribute('cx', f(i ? c.x1 : c.x0)); k.setAttribute('cy', f(c.top)); });
+  }
   return {
     get hidden() { return shows[0].hidden; },
     show() { for (const s of shows) s.show(); },
     hide(ms) { for (const s of shows) s.hide(ms, ms <= 0); },
-    place(x, floorY, S) {
+    place(x, floorY, S, body) {
+      // the body's box (stage pixels) in logo units, for the chair's back
+      if (S > 0) fitChair(chairFit(body ? { x0: 128 + (body.x - x) / S, x1: 128 + (body.x + body.w - x) / S, y0: 256 + (body.y - floorY) / S } : null, 256 - floorY / S));
       const at = `${f(x)},${f(floorY)},${S.toFixed(4)}`;
       if (at === placed) return;
       placed = at;

@@ -2961,7 +2961,8 @@ function stepWork(dt) {
     else if (phase === 'enter') {
       // the desk faces the screen with the mouse on the right: the body turns that way first
       if (l && l.facing !== 1) { if (words.has('turn')) body.do('turn'); else body.place(l.x, 1); }
-      work.desk.show();
+      // a pack that draws the whole scene brings out its own desk: the page shows no props
+      if (!workScene()) work.desk.show();
       sfx.play('pop', 'ui');
     } else if (phase === 'on') {
       // a body built on the kit sits down for `work`; one that is not may still know the word
@@ -2972,17 +2973,24 @@ function stepWork(dt) {
   const v = work.view = work.hands.view(performance.now());
   const state = phase === 'enter' || phase === 'on' || phase === 'leave' ? {
     phase, hand: v.hand, taps: v.taps, held: v.held, password: v.password, desk: DESK,
+    ms: { enter: workMs('--work-in', 520), leave: workMs('--work-out', 220) },
     mouse: { dx: round1(v.mouse.x), dy: round1(v.mouse.y), buttons: v.mouse.buttons, active: v.hands.right.onMouse },
   } : null;
   const key = JSON.stringify(state);
   if (key !== workSent) { workSent = key; body?.set({ work: state }); }
 }
-/** Places the props over the body and draws the keys, the mouse and the paws (the pack's own hands when it says `can.work`). */
+/** Whether the pack shown draws the whole work scene itself (manifest `can.work: 'scene'`): the page then draws no props. */
+const workScene = () => shownPack?.can?.work === 'scene';
+/**
+ * Places the props over the body and draws the keys, the mouse and the paws (the pack's own hands when it says `can.work`);
+ * for a pack that draws the whole scene, puts away any props still out (one switched to while seated).
+ */
 function drawWork() {
   const l = at();
   if (work.desk.hidden || !l || !work.view) return;
+  if (workScene()) { work.desk.hide(0); return; }
   const b = bounds();
-  work.desk.place(l.x, typeof l.y === 'number' ? l.y : b.floorY, b.S);
+  work.desk.place(l.x, typeof l.y === 'number' ? l.y : b.floorY, b.S, l.box);
   work.desk.draw(work.view, shownPack?.can?.work === true);
 }
 
