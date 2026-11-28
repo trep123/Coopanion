@@ -45,7 +45,8 @@ const clampTo = (v, a, b) => Math.max(a, Math.min(b, v));
 
 /**
  * A body's layout report as the page takes it (`size`: the stage, { W, H, S }): numbers where numbers belong, and the limits above.
- * `y`, where a body that stands off the floor has its feet, is kept only when the body gives one.
+ * `y`, where a body that stands off the floor has its feet, is kept only when the body gives one; `ledge` is true while
+ * the body stands on a ledge (a window's or an icon's top), which work mode waits for it to come down from.
  */
 export function readLayout(l, size) {
   if (!l || typeof l !== 'object') return null;
@@ -57,7 +58,7 @@ export function readLayout(l, size) {
   const pt = (p) => ({ x: clampTo(num(p?.x), 0, W), y: clampTo(num(p?.y), 0, H) });
   return {
     x: clampTo(num(l.x, W / 2), 0, W), ...(typeof l.y === 'number' && Number.isFinite(l.y) ? { y: clampTo(l.y, 0, H) } : {}), facing: l.facing === -1 ? -1 : 1, mode: typeof l.mode === 'string' ? l.mode.slice(0, 32) : 'idle',
-    busy: !!l.busy, moving: !!l.moving, pressing: !!l.pressing,
+    ledge: l.ledge === true, busy: !!l.busy, moving: !!l.moving, pressing: !!l.pressing,
     cursor: l.cursor === 'grab' || l.cursor === 'grabbing' ? l.cursor : '',
     box,
     hit: (Array.isArray(l.hit) ? l.hit : []).map((c) => ({ x: num(c?.x), y: num(c?.y), r: Math.max(0, num(c?.r)) })),

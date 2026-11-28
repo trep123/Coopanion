@@ -150,6 +150,8 @@ export function createPet(els, opts) {
   let hold = 0; // until T: an order from outside is in progress, free roaming waits
   /** Work mode as the page tells it (`setWork`), or null: the body sits at the page's desk and does not roam. */
   let work = null;
+  /** Work mode's `prepare` (the page waits for the body to come down from a ledge): only passed on to the figure. */
+  let workPrep = null;
   const freeGround = opts.ground === 'free';
   const startFacing = opts.startFacing === -1 ? -1 : 1;
   const pet = {
@@ -415,12 +417,14 @@ export function createPet(els, opts) {
   }
 
   /**
-   * Work mode from the page (see createBody's `set`), or null. `enter` stands the body still where it is; `on` sits it
+   * Work mode from the page (see createBody's `set`), or null. `prepare` is only passed on to the figure; `enter` stands the body still where it is; `on` sits it
    * down at the desk and holds it there; `leave` and null stand it up. Each new key press gives the body a small bounce.
    */
   function setWork(w) {
     const was = work;
     const phase = w && typeof w === 'object' && ['enter', 'on', 'leave'].includes(w.phase) ? w.phase : null;
+    // the body itself (a pack's body part) comes down from its ledge; the kit does nothing else for it
+    workPrep = w && typeof w === 'object' && w.phase === 'prepare' ? { phase: 'prepare' } : null;
     work = phase ? w : null;
     if (phase === 'leave' || !phase) {
       if (was?.phase === 'on' && (pet.mode === 'sit' || pet.mode === 'sleep')) { setMode('idle'); pet.sqv -= 1.2; }
@@ -783,7 +787,7 @@ export function createPet(els, opts) {
     const gesture = pet.pulse ? { kind: pet.pulse.kind, k: clamp((T - pet.pulse.t0) / pet.pulse.dur, 0, 1) } : null;
     custom.draw(petG, face, {
       look: pet.look, legs, low: pet.low, t: T, blink, eyeClose, acc: skin, swing: pet.swing,
-      face: fname, mode: pet.mode, modeT: pet.modeT, talk: pet.talkK, status: pet.status, drowse: pet.drowse, sit: pet.sitK, facing: pet.faceVis, tilt: pet.tilt, lean, groupRot: rot, gesture, work,
+      face: fname, mode: pet.mode, modeT: pet.modeT, talk: pet.talkK, status: pet.status, drowse: pet.drowse, sit: pet.sitK, facing: pet.faceVis, tilt: pet.tilt, lean, groupRot: rot, gesture, work: work ?? workPrep,
     });
 
     const footY = drag ? pet.dy + 220 * S * 1.09 : pet.fy;
@@ -1036,7 +1040,10 @@ const SVGNS = 'http://www.w3.org/2000/svg';
  * cue(kind), talk(), setScheme(id, o), dispose(); `words` lists every word its do() knows.
  *
  * `work` is work mode, or null when it is off (the page's desk, web/work-desk.js; the README's 形象包 section):
- * `{ phase, hand, taps, held, mouse, password, desk }`. `phase`: `enter` while the props come out around the standing
+ * `{ phase, hand, taps, held, mouse, password, desk }`, or just `{ phase: 'prepare' }` while the page waits for a body
+ * whose layout says `ledge: true` (it stands on a window's or an icon's top) to come down to the floor (a body part that
+ * climbs does that; the kit does nothing more, and the page brings the props out where the body stands after 8 s).
+ * `phase`: `enter` while the props come out around the standing
  * body, `on` while it sits at the desk, `leave` while they are packed away. `hand`: 'left' or 'right', the hand of the last
  * key pressed, or null; `taps` counts the presses; `held` `{ left, right }` whether a key is held under each hand; `mouse`
  * `{ dx, dy, buttons: { left, right, middle }, active }` the mouse's slide on the desk in logo units, its buttons, and

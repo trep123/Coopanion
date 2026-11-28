@@ -22,7 +22,7 @@ const input = require_('../host/work-input.cjs') as {
 };
 
 interface Phase { phase: string; changed: boolean; target: number | null }
-interface Machine { phase: string; step(on: boolean, body: { x: number; mode: string } | null, room: { minX: number; maxX: number }, now: number): Phase }
+interface Machine { phase: string; step(on: boolean, body: { x: number; mode: string; ledge?: boolean } | null, room: { minX: number; maxX: number }, now: number): Phase }
 interface HandsView {
   lit: Array<{ hand: Hand; row: number; col: number }>;
   hands: { left: { down: boolean }; right: { down: boolean; onMouse: boolean } };
@@ -34,6 +34,7 @@ const state = await import(new URL('../web/work-state.js', import.meta.url).href
   createWorkMachine(o?: { enterMs?: () => number; leaveMs?: () => number }): Machine;
   createWorkHands(): { feed(m: unknown, now: number): void; step(dt: number): void; view(now: number): HandsView };
   WORK_WALK_MAX: number;
+  WORK_GROUND_MAX: number;
   KEY_LIT_MS: number;
   PAW_DOWN_MS: number;
   KEY_ROWS: number;
@@ -228,6 +229,41 @@ describe('the work phases', () => {
     expect(m.step(false, standing(40), room, .1).phase).toBe('off');
     expect(m.step(true, null, room, .2).phase).toBe('off');
     expect(m.step(true, { x: 500, mode: 'air' }, room, .3).phase).toBe('off');
+  });
+
+  it('waits for a body on a ledge to come down, through its climb or hop, then brings the props out on the floor', () => {
+    const m = state.createWorkMachine();
+    const ledge = (x = 500, mode = 'idle') => ({ x, mode, ledge: true });
+    expect(m.step(true, ledge(), room, 0)).toMatchObject({ phase: 'ground', changed: true, target: null });
+    expect(m.step(true, ledge(560, 'walk'), room, 1).phase).toBe('ground');
+    // climbing down or hopping off is in the air: the props stay packed meanwhile
+    expect(m.step(true, { x: 600, mode: 'air' }, room, 2).phase).toBe('away');
+    // landed on a lower window on the way: still waiting
+    expect(m.step(true, ledge(600), room, 3).phase).toBe('ground');
+    expect(m.step(true, standing(620), room, 4)).toMatchObject({ phase: 'enter', changed: true });
+  });
+
+  it('skips the wait for a body on the floor, and a body that stays up gets its props where it stands after WORK_GROUND_MAX', () => {
+    expect(state.createWorkMachine().step(true, standing(), room, 0).phase).toBe('enter');
+    expect(state.createWorkMachine().step(true, { x: 500, mode: 'idle', ledge: false }, room, 0).phase).toBe('enter');
+    const m = state.createWorkMachine();
+    m.step(true, { x: 500, mode: 'idle', ledge: true }, room, 0);
+    expect(m.step(true, { x: 500, mode: 'idle', ledge: true }, room, state.WORK_GROUND_MAX - .1).phase).toBe('ground');
+    expect(m.step(true, { x: 500, mode: 'idle', ledge: true }, room, state.WORK_GROUND_MAX)).toMatchObject({ phase: 'enter', changed: true });
+    // turned off while waiting: off at once, and the wait starts over next time
+    const n = state.createWorkMachine();
+    n.step(true, { x: 500, mode: 'idle', ledge: true }, room, 0);
+    expect(n.step(false, { x: 500, mode: 'idle', ledge: true }, room, 1).phase).toBe('off');
+    expect(n.step(true, { x: 500, mode: 'idle', ledge: true }, room, 20).phase).toBe('ground');
+  });
+
+  it('waits again when the body is thrown onto a ledge after sitting down', () => {
+    const m = state.createWorkMachine();
+    m.step(true, standing(), room, 0);
+    m.step(true, standing(), room, 0);
+    expect(m.phase).toBe('on');
+    m.step(true, { x: 600, mode: 'air' }, room, 30);
+    expect(m.step(true, { x: 600, mode: 'idle', ledge: true }, room, 31).phase).toBe('ground');
   });
 });
 

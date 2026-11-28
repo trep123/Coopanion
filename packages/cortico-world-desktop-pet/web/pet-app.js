@@ -2945,7 +2945,7 @@ let workSent = '';
 host?.onWork?.((m) => work.hands.feed(m, performance.now()));
 const round1 = (v) => Math.round(v * 10) / 10;
 /**
- * Advances work mode by `dt`: the phase (walking clear of the edges, the props coming out, seated, carried away, packed
+ * Advances work mode by `dt`: the phase (down from a ledge, walking clear of the edges, the props coming out, seated, carried away, packed
  * up), the window's reading of the keyboard and mouse (only while the props are out), roaming held off, and what the body
  * is told (the kit's `set({ work })`): never the keys, only the hand of the last press and a count.
  */
@@ -2958,6 +2958,7 @@ function stepWork(dt) {
   if (phase !== 'off') holdRoam(2);
   if (changed) {
     if (phase === 'walk') body?.walk(target, false, 0);
+    // on a window's or an icon's top: the body is asked to come down first (the state below), the props wait
     else if (phase === 'enter') {
       // the desk faces the screen with the mouse on the right: the body turns that way first
       if (l && l.facing !== 1) { if (words.has('turn')) body.do('turn'); else body.place(l.x, 1); }
@@ -2975,7 +2976,7 @@ function stepWork(dt) {
     phase, hand: v.hand, taps: v.taps, held: v.held, password: v.password, desk: DESK,
     ms: { enter: workMs('--work-in', 520), leave: workMs('--work-out', 220) },
     mouse: { dx: round1(v.mouse.x), dy: round1(v.mouse.y), buttons: v.mouse.buttons, active: v.hands.right.onMouse },
-  } : null;
+  } : phase === 'ground' ? { phase: 'prepare' } : null;
   const key = JSON.stringify(state);
   if (key !== workSent) { workSent = key; body?.set({ work: state }); }
 }

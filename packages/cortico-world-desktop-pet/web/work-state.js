@@ -3,7 +3,9 @@
  * starts and ends (`createWorkMachine`), and the hands, keys and mouse drawn from the window's input messages
  * (`createWorkHands`, host/work-input.cjs). Nothing here touches the page.
  *
- * Phases: `off`; `walk` (work mode was turned on with the body too near an edge for the desk: it walks to `target`
+ * Phases: `off`; `ground` (work mode was turned on while the body stood on a ledge, a window's or an icon's top: the body
+ * is asked to come down to the floor first, `work: { phase: 'prepare' }`, and the props wait for it, at most
+ * WORK_GROUND_MAX; a body that does not come down by then gets its props where its feet are); `walk` (work mode was turned on with the body too near an edge for the desk: it walks to `target`
  * first); `enter` (the desk, chair, keyboard and mouse come out around the standing body, for `enterMs`); `on` (the
  * body sits at the desk); `away` (the body was picked up or thrown: the props are packed away and come out again where it
  * lands); `leave` (work mode was turned off: the props are packed away for `leaveMs` while the body stands up).
@@ -12,19 +14,31 @@
 /** Seconds a walk to the desk's spot may take before the desk comes out where the body is. */
 export const WORK_WALK_MAX = 6;
 /** Body modes in which it is carried or in the air (web/kit/body.js): no desk under it then. */
+/** Seconds a body on a ledge may take to come down to the floor before the props come out where it stands. */
+export const WORK_GROUND_MAX = 8;
 const AWAY_MODES = new Set(['drag', 'air', 'crouch', 'land']);
 
 /**
  * `step(on, body, room, now)` advances the phase and returns `{ phase, changed, target }`: `on` is whether work mode is
- * wanted, `body` the body's layout (`{ x, mode }`, or null with no body), `room` `{ minX, maxX }` the stage x the
+ * wanted, `body` the body's layout (`{ x, mode, ledge }`, or null with no body), `room` `{ minX, maxX }` the stage x the
  * body's middle must stand within for the props to fit, `now` in seconds. `target` is the x to walk to in `walk`.
  * `enterMs` and `leaveMs` are read on each step (0 at low motion).
  */
 export function createWorkMachine({ enterMs = () => 0, leaveMs = () => 0 } = {}) {
   let phase = 'off', since = 0, target = null;
   const go = (p, now) => { phase = p; since = now; };
-  /** The phase after `off` or `away`: walk first when the body stands where the props do not fit. */
+  /** When the body first stood on a ledge since work mode was turned on (null: it has not). */
+  let groundSince = null;
+  /**
+   * The phase after `off` or `away`: down from a ledge first (`ground`), then walk first when the body stands where the
+   * props do not fit. A body still on a ledge after WORK_GROUND_MAX (counted from when it was first asked) stays there.
+   */
   const start = (body, room, now) => {
+    if (body.ledge) {
+      if (groundSince == null) groundSince = now;
+      if (now - groundSince < WORK_GROUND_MAX) { target = null; go('ground', now); return; }
+    }
+    groundSince = null;
     const x = Math.min(room.maxX, Math.max(room.minX, body.x));
     if (Math.abs(x - body.x) > 2 && room.minX <= room.maxX) { target = x; go('walk', now); } else { target = null; go('enter', now); }
   };
@@ -34,8 +48,9 @@ export function createWorkMachine({ enterMs = () => 0, leaveMs = () => 0 } = {})
       const was = phase;
       const away = !body || AWAY_MODES.has(body.mode);
       if (!on) {
+        groundSince = null;
         if (phase === 'enter' || phase === 'on') go('leave', now);
-        else if (phase === 'walk' || phase === 'away') go('off', now);
+        else if (phase === 'walk' || phase === 'away' || phase === 'ground') go('off', now);
         else if (phase === 'leave' && (now - since) * 1000 >= leaveMs()) go('off', now);
       } else if (phase === 'off' || phase === 'leave') {
         if (!away) start(body, room, now);
@@ -43,6 +58,8 @@ export function createWorkMachine({ enterMs = () => 0, leaveMs = () => 0 } = {})
         go('away', now);
       } else if (phase === 'away') {
         if (!away) start(body, room, now);
+      } else if (phase === 'ground') {
+        if (!body.ledge || now - groundSince >= WORK_GROUND_MAX) start(body, room, now);
       } else if (phase === 'walk') {
         if (Math.abs(body.x - target) <= 3 || now - since >= WORK_WALK_MAX) go('enter', now);
       } else if (phase === 'enter' && (now - since) * 1000 >= enterMs()) {
