@@ -1,15 +1,17 @@
 /**
  * Work mode's props, drawn by the pet page for every figure pack: a chair behind the body, and in front of it a desk
  * with a keyboard and a mouse on it, seen from the front, plus two paws that do the typing for a body whose pack does not
- * draw its own hands (manifest `can.work`). Keys light up as they are pressed (by zone: the window never says which key),
- * the mouse's buttons as they are held, and the mouse slides after the cursor.
+ * draw its own hands (manifest `can.work`). The keyboard is a standard 60% layout (web/kit/work-keys.js) with small
+ * legends; the key pressed lights up and stays lit while held, fading out after its release, and the paw that types it
+ * reaches for it (config `window.workShowKeys` off, or a key the layout does not have: a key of its hand's row, in turn).
+ * The mouse's buttons light as they are held, and the mouse slides after the cursor.
  *
  * Everything is in the body's logo units (web/kit/body.js: the body's middle at x=128, the floor at y=256, screen right
  * to +x) and placed over the body each frame (`place`). The props come out and are packed away through `showHide`
  * (`.entering`, `.leaving` in pet.css, timed by `--work-in` and `--work-out`), which follows the motion levels.
  */
 import { showHide } from './show-hide.js';
-import { KEY_ROWS, KEYS_PER_HAND } from './work-state.js';
+import { WORK_KEYS, workKey } from './kit/work-keys.js';
 
 /**
  * The desk in logo units: its top runs from `top` (back edge) to `front`; the keyboard spans `keys` on it, the mouse rests
@@ -18,7 +20,7 @@ import { KEY_ROWS, KEYS_PER_HAND } from './work-state.js';
  */
 export const DESK = {
   top: 176, front: 212, x0: -40, x1: 296,
-  keys: { x0: 68, x1: 188, y0: 180, y1: 207 },
+  keys: { x0: 58, x1: 198, y0: 179, y1: 208 },
   mouse: [226, 196],
   rest: { left: [100, 207], right: [156, 207] },
   reach: 172,
@@ -54,16 +56,24 @@ const CHAIR = `<g class="w-part w-chair" style="--i:0">
   <circle class="w-knob" cx="44" cy="108" r="9"/><circle class="w-knob" cx="212" cy="108" r="9"/>
 </g>`;
 
+/** How much narrower the keyboard's back row is drawn than its front one, seen a little from above. */
+const KB_BACK = .06;
+/** The keyboard's tray inset around its keys, in logo units. */
+const KB_PAD = 2;
 /**
- * Key `col` of `hand`'s half in keyboard row `row` (0 the back row): `{ x, y, w, h }`, its top left corner and size. The
- * keyboard is a tray narrower at the back, KEY_ROWS rows of keys, each hand's half KEYS_PER_HAND keys wide.
+ * Point `u`, `v` of the keyboard's keys (0..1 left to right, back to front: the layout's coordinates) in logo units: `[x, y]`.
+ * The tray is narrower at the back.
  */
-function keyRect(hand, row, col) {
-  const k = DESK.keys, rowH = (k.y1 - k.y0 - 4) / KEY_ROWS;
-  const back = 1 - (KEY_ROWS - row) / (KEY_ROWS * 6);
-  const half = (k.x1 - k.x0 - 6) / 2 * back, mid = (k.x0 + k.x1) / 2, w = half / KEYS_PER_HAND;
-  const c = (hand === 'right' ? KEYS_PER_HAND : 0) + col;
-  return { x: mid - half + c * w + (hand === 'right' ? 1.5 : -1.5), y: k.y0 + 2 + row * rowH, w, h: rowH };
+export function keyboardPoint(u, v) {
+  const k = DESK.keys, mid = (k.x0 + k.x1) / 2;
+  const half = (k.x1 - k.x0 - 2 * KB_PAD - 4) / 2 * (1 - KB_BACK * (1 - v));
+  return [mid + (u * 2 - 1) * half, k.y0 + KB_PAD + v * (k.y1 - k.y0 - 2 * KB_PAD)];
+}
+/** Key `key`'s box in logo units (web/kit/work-keys.js): `{ x, y, w, h }`, its width as at its row's middle. */
+function keyRect(key) {
+  const y = keyboardPoint(0, key.y)[1], y1 = keyboardPoint(0, key.y + key.h)[1];
+  const [xa] = keyboardPoint(key.x, key.y + key.h / 2), [xb] = keyboardPoint(key.x + key.w, key.y + key.h / 2);
+  return { x: xa, y, w: xb - xa, h: y1 - y };
 }
 
 /**
@@ -74,13 +84,11 @@ function deskMarkup() {
   const { top, front, x0, x1, keys: k } = DESK;
   const inset = 14;
   const rows = [];
-  for (let r = 0; r < KEY_ROWS; r++) {
-    for (const hand of ['left', 'right']) {
-      for (let col = 0; col < KEYS_PER_HAND; col++) {
-        const { x, y, w, h } = keyRect(hand, r, col);
-        rows.push(`<rect class="w-key" data-k="${hand}-${r}-${col}" x="${f(x + .6)}" y="${f(y + .5)}" width="${f(w - 1.2)}" height="${f(h - 1)}" rx="1"/>`);
-      }
-    }
+  for (const key of WORK_KEYS) {
+    const { x, y, w, h } = keyRect(key);
+    const box = `x="${f(x + .35)}" y="${f(y + .35)}" width="${f(w - .7)}" height="${f(h - .7)}" rx=".9"`;
+    const legend = key.label ? `<text class="w-leg" x="${f(x + w / 2)}" y="${f(y + h / 2 + 1.05)}">${key.label.replace('&', '&amp;').replace('<', '&lt;')}</text>` : '';
+    rows.push(`<g class="w-k" data-k="${key.id}"><rect class="w-key" ${box}/><rect class="w-key-lit" ${box} opacity="0"/>${legend}</g>`);
   }
   return { top: `<g class="w-part w-desk" style="--i:1">
   <path class="w-wood" d="M${x0 + inset} ${top}H${x1 - inset}L${x1} ${front}H${x0}Z"/>
@@ -139,13 +147,13 @@ export function createWorkDesk(stage, figureLayer, { enterMs = () => 0 } = {}) {
   /** Whether the desk's top is under the body: for a pack that draws its own hands on it (`draw`'s `ownPaws`). */
   let topUnder = false;
   const shows = [back, top, front].map((el) => showHide(el, { enterMs }));
-  const keys = new Map([...top.querySelectorAll('.w-key')].map((el) => [el.dataset.k, el]));
+  const keys = new Map([...top.querySelectorAll('.w-k')].map((el) => [el.dataset.k, el.querySelector('.w-key-lit')]));
   const buttons = Object.fromEntries([...top.querySelectorAll('.w-button')].map((el) => [el.dataset.b, el]));
   const mouseBody = top.querySelector('.w-mouse-body');
   const paws = front.querySelector('.w-paws');
   const paw = Object.fromEntries([...front.querySelectorAll('.w-paw')].map((el) => [el.dataset.hand, el]));
   const chair = { seat: back.querySelector('.w-seat'), post: back.querySelector('.w-post'), knobs: [...back.querySelectorAll('.w-knob')] };
-  let placed = '', chairAt = '', drawn = { lit: new Set(), buttons: '', mouse: '', paws: null };
+  let placed = '', chairAt = '', drawn = { lit: new Map(), buttons: '', mouse: '', paws: null };
   /** Fits the chair's back to the body (`chairFit`). */
   function fitChair(c) {
     const key = `${f(c.x0)},${f(c.x1)},${f(c.top)}`;
@@ -172,23 +180,25 @@ export function createWorkDesk(stage, figureLayer, { enterMs = () => 0 } = {}) {
       // a pack that draws its own hands gets the desk's top under its body, the front still over it: the body hides
       // what of itself is below the desk's back edge, and its hands lie on the keyboard and the mouse
       if (!!ownPaws !== topUnder) { topUnder = !!ownPaws; if (topUnder) figureLayer.before(top); else figureLayer.after(top); }
-      const lit = new Set(view.lit.map((l) => `${l.hand}-${l.row}-${l.col}`));
-      for (const k of drawn.lit) if (!lit.has(k)) keys.get(k)?.classList.remove('lit');
-      for (const k of lit) if (!drawn.lit.has(k)) keys.get(k)?.classList.add('lit');
+      // each lit key's light: full while down, fading after its release
+      const lit = new Map(view.lit.map((l) => [l.id, String(Math.round(l.k * 20) / 20)]));
+      for (const id of drawn.lit.keys()) if (!lit.has(id)) keys.get(id)?.setAttribute('opacity', '0');
+      for (const [id, k] of lit) if (drawn.lit.get(id) !== k) keys.get(id)?.setAttribute('opacity', k);
       drawn.lit = lit;
       const b = view.mouse.buttons, bk = `${b.left}${b.right}${b.middle}`;
       if (bk !== drawn.buttons) { for (const id of ['left', 'right', 'middle']) buttons[id].classList.toggle('lit', b[id]); drawn.buttons = bk; }
       const mk = `${f(view.mouse.x)},${f(view.mouse.y * .5)}`;
       if (mk !== drawn.mouse) { mouseBody.setAttribute('transform', `translate(${mk})`); drawn.mouse = mk; }
-      // the page's paws: each rests at the keyboard's near edge and reaches up to just below the key it pressed while it is down;
-      // the right one rests on the mouse's near end from the mouse's last use
+      // the page's paws: each rests at the keyboard's near edge and reaches to the key it pressed while it is down, its
+      // pad's top on the key's lower half so the lit key stays in sight; the right one rests on the mouse's near end from
+      // the mouse's last use
       const h = view.hands;
       const spot = (hand) => {
         const k = h[hand].key;
         if (!h[hand].down || !k) return DESK.rest[hand];
-        const r = keyRect(hand, k.row, k.col);
-        // just below the key, which stays in sight lit
-        return [r.x + r.w / 2, r.y + r.h + 4];
+        const key = workKey(k.id);
+        const [x, y] = keyboardPoint(k.x, key ? key.y + key.h : k.y + .1);
+        return [x, y + 5.5];
       };
       const left = spot('left'), right = h.right.onMouse ? [DESK.mouse[0] + view.mouse.x, DESK.mouse[1] + 6 + view.mouse.y * .5] : spot('right');
       const pk = ownPaws ? '' : `${h.left.down}|${h.right.down}|${left.map(f)}|${right.map(f)}`;

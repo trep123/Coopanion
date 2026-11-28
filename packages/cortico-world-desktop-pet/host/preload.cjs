@@ -49,11 +49,15 @@ contextBridge.exposeInMainWorld('petHost', {
   watchIcons: (on) => ipcRenderer.send('pet:watchIcons', !!on),
   /** Those icons while they are read, each time they change: `{ icons, ledges }` in page pixels (host/icons.cjs `iconsFrom`), or null when they cannot be read. */
   onIcons: (cb) => ipcRenderer.on('pet:icons', (_e, desk) => cb(Array.isArray(desk?.icons) && Array.isArray(desk?.ledges) ? desk : null)),
-  /** Whether the window reads the keyboard and the mouse for work mode: on only while work mode is on. */
-  watchWork: (on) => ipcRenderer.send('pet:watchWork', !!on),
+  /**
+   * Whether the window reads the keyboard and the mouse for work mode: on only while work mode is on. `opts.keys`
+   * (config `window.workShowKeys`): the messages name the keys pressed and held; sent again when it changes.
+   */
+  watchWork: (on, opts) => ipcRenderer.send('pet:watchWork', !!on, { keys: opts?.keys === true }),
   /**
    * Work mode's input while it is read (host/work-input.cjs): `{ paused, keys }` each time reading stops or starts
-   * (`keys`: whether keys and buttons are read on this system), else `{ held, presses, buttons, move, password }`.
+   * (`keys`: whether keys and buttons are read on this system), else `{ held, presses, buttons, move, password, down? }` (a press's `id` and `down`, the ids held, only with
+   * `watchWork`'s `keys`; never during a password).
    */
   onWork: (cb) => ipcRenderer.on('pet:work', (_e, m) => cb(m && typeof m === 'object' ? m : null)),
   /** Where the cursor is, in page pixels, or null off the window: called every 15 ms on Windows, 10 times a second elsewhere. */

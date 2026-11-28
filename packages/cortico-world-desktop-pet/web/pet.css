@@ -125,7 +125,8 @@ body.desk .floor{display:none}
 .work .w-knob{fill:var(--work-wood); stroke:var(--work-wood-line); stroke-width:3}
 .work .w-device{fill:var(--work-device); stroke:var(--skin-ink); stroke-width:2.4; stroke-linejoin:round}
 .work .w-key{fill:var(--work-key)}
-.work .w-key.lit, .work .w-button.lit{fill:var(--skin-eye)}
+.work .w-key-lit, .work .w-button.lit{fill:var(--skin-eye)}
+.work .w-leg{font:600 2.6px/1 system-ui, sans-serif; fill:var(--skin-ink); opacity:.55; text-anchor:middle}
 .work .w-button{fill:var(--work-key); stroke:var(--skin-ink); stroke-width:1}
 .work .w-paw ellipse{fill:var(--work-paw); stroke:var(--skin-ink); stroke-width:4}
 .work .w-paw path{fill:none; stroke:var(--skin-ink); stroke-width:2; stroke-linecap:round; opacity:.5}

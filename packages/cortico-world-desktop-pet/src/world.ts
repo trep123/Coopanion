@@ -1047,6 +1047,7 @@ export class DesktopPetWorld implements World {
       overTaskbar: this.cfg.window.overTaskbar,
       hideFromCapture: this.cfg.window.hideFromCapture,
       work: this.cfg.window.work,
+      workShowKeys: this.cfg.window.workShowKeys,
       clickThrough: this.clickThrough,
       language: this.appLanguage,
       user: this.userName,

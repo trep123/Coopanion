@@ -1,4 +1,4 @@
-<!-- Owner: src/definition.ts, src/webui/client.ts, src/cua/cua.ts, src/cua/engine/user-activity.ts, src/cua/engine/wait-idle.ts, src/cua/engine/foreground.ts, src/world.ts, src/asr/hotkey.ts, src/asr/system-recognizer.ts, src/asr/transcription-api.ts, web/mic.js, host/app-store.cjs, host/work-input.cjs, web/work-state.js, web/work-desk.js -->
+<!-- Owner: src/definition.ts, src/webui/client.ts, src/cua/cua.ts, src/cua/engine/user-activity.ts, src/cua/engine/wait-idle.ts, src/cua/engine/foreground.ts, src/world.ts, src/asr/hotkey.ts, src/asr/system-recognizer.ts, src/asr/transcription-api.ts, web/mic.js, host/app-store.cjs, host/work-input.cjs, web/work-state.js, web/work-desk.js, web/kit/work-keys.js -->
 
 <p align="center">
   <picture>
@@ -212,16 +212,20 @@ Coo、精灵图和 Live2D 式分件模型都画在页面的沙箱 frame 里,截�
 被拎起来或甩出去时道具先收起，落地站稳后在新位置重新拿出来再坐下，工作模式不因此关掉。环境提示词经 `{{pet.work}}` 告诉 bot 现在是工作模式，不带任何按键信息。
 
 坐下后桌宠页让窗口进程读键盘和鼠标(`petHost.watchWork`,`host/work-input.cjs`),每秒约 60 次;工作模式关掉、道具收起、窗口隐藏、页面渲染进程没了、前台窗口全屏铺满桌宠那块屏时都不读。
-窗口进程只往外发粗粒度的活动:每次按下的键属于左手还是右手、哪一排(`KEY_ZONES`,QWERTY 指法；空格算左手，方向键、编辑键和小键盘算右手),每只手按着几个键，鼠标哪几个键按着，光标往哪个方向移动(按 24 像素一步归一化)。
-哪个键、按键顺序以外的细节和任何文字都不离开窗口进程，不写日志，不进 World 和模型。桌宠页按手和排点亮那一半键盘上的一个键(轮流取，不对应真实的键)、把爪子按到它下面;
-右手在鼠标被用过后搭在鼠标上，右手区再有按键时回到键盘;鼠标的左右键和中键按下时亮起，鼠标跟着光标的方向在桌上滑一点再慢慢回来。交给形象包的身体的更少：只有最后一下是哪只手、按了多少下。
+窗口进程往外发的：每次按下的键属于左手还是右手、哪一排(`KEY_ZONES`,QWERTY 指法；空格算左手，方向键、编辑键和小键盘算右手),每只手按着几个键，鼠标哪几个键按着，光标往哪个方向移动(按 24 像素一步归一化)。
+`window.workShowKeys`(默认开，热更新)开着时，另外带上按下的是哪个键和现在按着哪些键：按它在标准键盘上的位置命名(`KEY_IDS`,用 `KeyboardEvent.code` 的名字，如 `KeyA`、`Digit1`、`Space`、`ShiftLeft`;
+桌宠页的键盘是标准 ANSI 60% 配列，`web/kit/work-keys.js`,Esc、F 键、方向键、编辑键和小键盘不在上面，只按手和排)。键的名字只发给桌宠页(`petHost.onWork`):
+不进 World、不进模型和环境提示词、不写日志和遥测，也不进 OBS 叠加层和 `pet_see_self` 截图的元数据；窗口进程也不把它们拼成文字。关掉 `window.workShowKeys` 时和以前一样只有手和排。
+桌宠页的键盘按真实配列画(逐排错开，字母和数字键印着小字),按下的那个键亮起，按着一直亮，松开后约 120 ms 淡掉；爪子按标准指法伸到那个键上(6、Y、H、N 归右手，空格用离得近的那只手的拇指)。
+不知道是哪个键时(开关关着，或键盘上没有这个键)点亮那只手那一排里的一个键(轮流取)。
+右手在鼠标被用过后搭在鼠标上，右手区再有按键时回到键盘;鼠标的左右键和中键按下时亮起，鼠标跟着光标的方向在桌上滑一点再慢慢回来。交给形象包的身体的：最后一下是哪只手、按了多少下，开关开着时还有亮着的键(`keys`,见「工作模式里的身体」)。
 
 | 平台 | 键盘和鼠标键 | 鼠标移动 |
 |---|---|---|
 | Windows | 轮询 `GetAsyncKeyState`(不装钩子，不往别的进程注入 DLL);它的低位(上次询问以来按过)所有调用者共用，只用来补上两次轮询之间按下又松开的键，开始读后的第一次只记哪些键按着。鼠标键读的是物理键，左右手互换前的 | 窗口进程已有的光标读数(`host/cursor.cjs`) |
 | macOS、Linux | 不读，爪子不打字 | 同上 |
 
-输入密码时不点键：焦点在经典 Win32 `Edit` 控件且带 `ES_PASSWORD` 时(`GetGUIThreadInfo`,每 0.25 秒查一次),窗口进程一个按键都不发，身体闭上眼睛。浏览器、UWP 应用自己画的密码框认不出来，按普通输入处理。
+输入密码时不点键：焦点在经典 Win32 `Edit` 控件且带 `ES_PASSWORD` 时(`GetGUIThreadInfo`,每 0.25 秒查一次),窗口进程一个按键都不发(手和排、键的名字都不发),身体闭上眼睛。浏览器、UWP 应用自己画的密码框认不出来，按普通输入处理。
 
 ## 语音输入
 
@@ -468,7 +472,11 @@ Coopanion 在 Linux 上固定跑在 X11 上;Wayland 会话里经 XWayland 只看
 | `held` | `{ left, right }`:每只手现在有没有按着键 |
 | `mouse` | `{ dx, dy, buttons: { left, right, middle }, active }`:鼠标在桌上滑开的距离(逻辑单位)、按着的键、右手是不是搭在鼠标上 |
 | `password` | 正在输入密码，这期间没有按键 |
+| `keys` | 亮着的键(`window.workShowKeys` 关着时为空数组):`[{ id, x, y, hand, down, k }]`,`id` 是键名(`KeyboardEvent.code`),`x`、`y` 是键中心在键盘上的位置(0..1,x 向右,y 从最后一排数字键到最前一排空格),`hand` 是伸过去的手(空格是离得近的那只),`down` 是不是按着,`k` 是亮度(按着为 1,松开后约 120 ms 淡到 0) |
 | `desk` | 桌子的位置，身体的逻辑单位(x=128 是身体中线,y=256 是地面，屏幕右边为 +x):`top`、`front` 桌面后沿和前沿,`keys: { x0, x1, y0, y1 }` 键盘,`mouse: [x, y]`,`rest: { left, right }` 两只手放在键盘前沿的位置 |
+
+整张键盘的配列在 kit 里:`kit.workKeyLayout` 是每个键 `{ id, label, row, hand, x, y, w, h, cx, cy }`(框和中心，都是 0..1),`kit.workKey(id)` 查一个键，`kit.workKeyUnits`、`kit.workKeyRows` 是 15 个键位宽、5 排。
+自己画键盘的包把 `keys` 的 `x`、`y` 映射到画上的键盘，就能点亮那个键、把手伸过去。`keys` 只在页面和身体之间传，包也不该把它发出去(身体发出的事件和日志不带它)。
 
 页面在坐下前把身体转向右边，所以逻辑单位的 x 和屏幕的 x 同向。kit 的身体自己处理:`on` 时坐下并保持坐着(被拎走落地后再坐下),不走动，拒绝离开座位的动作，眼睛看着手，输入密码时闭眼，每按一下轻轻一颤;
 `frame.work` 是同一个对象，形象可以按它画坐姿和手。不用 kit 的包收到 `set({ work })` 自己决定怎么坐;页面在 `on` 时另外 `do('sit')`(词表里有 `sit` 的话)。

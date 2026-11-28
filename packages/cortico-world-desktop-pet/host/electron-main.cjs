@@ -431,7 +431,9 @@ function runPetHost({ url, parentPid = 0, tray: withTray = true }) {
     const msg = work.poll(Date.now());
     if (msg) win.webContents.send('pet:work', msg);
   };
-  const watchWork = (on) => {
+  // `opts.keys`: config `window.workShowKeys`, whether the page gets the keys' ids (host/work-input.cjs)
+  const watchWork = (on, opts) => {
+    work.setShowKeys(!!(opts && typeof opts === 'object' && opts.keys === true));
     clearInterval(workTimer);
     workTimer = null;
     workPaused = null;
@@ -630,7 +632,7 @@ function runPetHost({ url, parentPid = 0, tray: withTray = true }) {
   onPet('pet:lendClicks', (_e, on) => { clicksLent = !!on; lockMouse(); });
   onPet('pet:watchWindows', (_e, on) => watchWindows(!!on));
   onPet('pet:watchIcons', (_e, on) => watchIcons(!!on));
-  onPet('pet:watchWork', (_e, on) => watchWork(!!on));
+  onPet('pet:watchWork', (_e, on, opts) => watchWork(!!on, opts));
   onPet('pet:openDress', () => openDress());
   let language = 'zh';
   onPet('pet:language', (_e, code) => {

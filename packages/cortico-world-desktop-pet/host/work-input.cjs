@@ -1,10 +1,13 @@
 /**
  * What the pet's work mode reads of the keyboard and the mouse, for its hands to follow (web/work-mode.js).
  *
- * Only coarse activity leaves this file: for each key that went down, the hand that types it and its row
- * (`KEY_ZONES`); how many keys each hand holds; which mouse buttons are down; the direction the cursor moved.
- * No key's identity, no text and no order of keys within a zone goes to the page, the World, a log or the model.
- * While the focused control is a password box (`password`), no key reaches the page at all.
+ * What leaves this file: for each key that went down, the hand that types it and its row (`KEY_ZONES`); how many keys
+ * each hand holds; which mouse buttons are down; the direction the cursor moved. With `showKeys` on (config
+ * `window.workShowKeys`, which the page passes in `petHost.watchWork`), also which key it was and the keys held now, by
+ * their place on a standard keyboard (`KEY_IDS`, the ids of web/kit/work-keys.js), so the page can light that key and
+ * reach for it. These go to the pet page only (`pet:work`): never to the World, a log, the model or telemetry, and no
+ * text is ever put together from them here. While the focused control is a password box (`password`), no key reaches the
+ * page at all, neither its zone nor its id.
  *
  * - Windows: the keys and the buttons are polled with `GetAsyncKeyState` (no hook, no DLL injected into other
  *   processes), each time `poll` is called, which the window process does only while work mode is on, the window is
@@ -45,11 +48,28 @@ const KEY_ZONES = new Map([
   ...[0x48, 0x4a, 0x4b, 0x4c, 0xba, 0xde, 0x0d, 0x64, 0x65, 0x66, 0x6b].map((vk) => [vk, { hand: 'right', row: 2 }]),
   ...[0x4e, 0x4d, 0xbc, 0xbe, 0xbf, 0xa1, 0xa3, 0xa5, 0x5c, 0x5d, 0x25, 0x26, 0x27, 0x28, 0x60, 0x61, 0x62, 0x63, 0x6e, 0x6a, 0x6f, 0x90].map((vk) => [vk, { hand: 'right', row: 3 }]),
 ]);
+/**
+ * Windows virtual-key codes by the id of their key on the page's keyboard (web/kit/work-keys.js, the names of
+ * `KeyboardEvent.code`). Keys the page's 60% keyboard does not have (Esc, the function row, arrows, the editing block,
+ * the number pad) have none and come through as their zone only. The number pad's Enter reads as Enter.
+ */
+const KEY_IDS = new Map([
+  [0xc0, 'Backquote'], ...[...'1234567890'].map((d) => [d.charCodeAt(0), `Digit${d}`]), [0xbd, 'Minus'], [0xbb, 'Equal'], [0x08, 'Backspace'],
+  [0x09, 'Tab'], ...[...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map((c) => [c.charCodeAt(0), `Key${c}`]), [0xdb, 'BracketLeft'], [0xdd, 'BracketRight'], [0xdc, 'Backslash'],
+  [0x14, 'CapsLock'], [0xba, 'Semicolon'], [0xde, 'Quote'], [0x0d, 'Enter'],
+  [0xa0, 'ShiftLeft'], [0xbc, 'Comma'], [0xbe, 'Period'], [0xbf, 'Slash'], [0xa1, 'ShiftRight'],
+  [0xa2, 'ControlLeft'], [0x5b, 'MetaLeft'], [0xa4, 'AltLeft'], [0x20, 'Space'], [0xa5, 'AltRight'], [0x5c, 'MetaRight'], [0x5d, 'ContextMenu'], [0xa3, 'ControlRight'],
+]);
 const VK_LBUTTON = 0x01, VK_RBUTTON = 0x02, VK_MBUTTON = 0x04;
 
 /** The zone of virtual-key `vk`, `{ hand, row }`, or null for a key work mode does not show. */
 function zoneOf(vk) {
   return KEY_ZONES.get(vk) ?? null;
+}
+
+/** The id of virtual-key `vk`'s key on the page's keyboard, or null for a key it does not draw. */
+function keyIdOf(vk) {
+  return KEY_IDS.get(vk) ?? null;
 }
 
 const clamp1 = (v) => Math.max(-1, Math.min(1, v));
@@ -59,11 +79,13 @@ const clamp1 = (v) => Math.max(-1, Math.min(1, v));
  * (`keys` the virtual-key codes down or tapped since the last reading, `buttons` `{ left, right, middle }`, `cursor`
  * `{ x, y }` in screen pixels or null, `password` whether the focus is a password box) and returns a message when
  * something changed and SEND_EVERY_MS have passed since the last one, else null:
- * `{ held: { left, right }, presses: [{ hand, row }], buttons, move: { dx, dy } | null, password }`.
+ * `{ held: { left, right }, presses: [{ hand, row, id? }], buttons, move: { dx, dy } | null, password, down? }`.
  * `presses` are the keys that went down since the last message, oldest first; `held` counts the keys down now per hand.
- * During a password box `held` is zero and `presses` empty.
+ * With `showKeys` (`setShowKeys`), a press of a key the page draws carries its `id` (KEY_IDS) and `down` lists the ids
+ * held now; without it neither comes. During a password box `held` is zero, `presses` empty and no `down` comes.
  */
-function createWorkTracker() {
+function createWorkTracker({ showKeys = false } = {}) {
+  let ids = !!showKeys;
   // the first reading after a start or a reset only learns what is down: the low bit of GetAsyncKeyState may carry a
   // press from long before
   let primed = false, down = new Set(), presses = [], sentAt = -Infinity, last = '', moved = { x: 0, y: 0 }, at = null;
@@ -77,7 +99,10 @@ function createWorkTracker() {
         if (!zone) continue;
         next.add(vk);
         held[zone.hand]++;
-        if (primed && !down.has(vk) && !password && presses.length < PRESSES_MAX) presses.push(zone);
+        if (primed && !down.has(vk) && !password && presses.length < PRESSES_MAX) {
+          const id = ids ? keyIdOf(vk) : null;
+          presses.push(id ? { ...zone, id } : { ...zone });
+        }
       }
       down = next;
       primed = true;
@@ -88,6 +113,7 @@ function createWorkTracker() {
         buttons: { left: !!buttons.left, right: !!buttons.right, middle: !!buttons.middle },
         password: !!password,
       };
+      if (ids && !password) state.down = [...next].map(keyIdOf).filter(Boolean);
       if (now - sentAt < SEND_EVERY_MS) return null;
       const move = Math.hypot(moved.x, moved.y) >= 1 ? { dx: clamp1(moved.x / MOVE_FULL_PX), dy: clamp1(moved.y / MOVE_FULL_PX) } : null;
       const key = JSON.stringify(state);
@@ -96,6 +122,8 @@ function createWorkTracker() {
       presses = []; moved = { x: 0, y: 0 }; last = key; sentAt = now;
       return msg;
     },
+    /** Whether presses carry their key's id and messages the ids held (config `window.workShowKeys`). */
+    setShowKeys(on) { ids = !!on; if (!ids) presses = presses.map(({ hand, row }) => ({ hand, row })); },
     /** Forgets what was down and where the cursor was, as after a pause: the next reading starts afresh. */
     reset() { primed = false; down = new Set(); presses = []; moved = { x: 0, y: 0 }; at = null; last = ''; sentAt = -Infinity; },
   };
@@ -133,15 +161,15 @@ function openWin32Input(koffi) {
 
 /**
  * The work mode's input: `poll(now)` reads the keyboard, the mouse buttons and `cursor()` (screen pixels, or null) and
- * returns the tracker's message or null. `available.keys` is whether keys and buttons are read here (Windows with koffi);
+ * returns the tracker's message or null; `showKeys` (and `setShowKeys`) names the keys in it, see createWorkTracker. `available.keys` is whether keys and buttons are read here (Windows with koffi);
  * where they are not, `poll` still reports the cursor's movement. `reset()` after a pause.
  */
-function createWorkInput({ cursor = () => null, platform = process.platform, loadKoffi = () => require('koffi') } = {}) {
+function createWorkInput({ cursor = () => null, platform = process.platform, loadKoffi = () => require('koffi'), showKeys = false } = {}) {
   let input = null;
   if (platform === 'win32') {
     try { input = openWin32Input(loadKoffi()); } catch { input = null; }
   }
-  const tracker = createWorkTracker();
+  const tracker = createWorkTracker({ showKeys });
   let passwordAt = -Infinity, password = false;
   return {
     available: { keys: !!input },
@@ -157,7 +185,9 @@ function createWorkInput({ cursor = () => null, platform = process.platform, loa
       return tracker.update({ keys, buttons, cursor: cursor(), password }, now);
     },
     reset() { tracker.reset(); passwordAt = -Infinity; password = false; },
+    /** Config `window.workShowKeys`: whether the messages name the keys (createWorkTracker). */
+    setShowKeys(on) { tracker.setShowKeys(on); },
   };
 }
 
-module.exports = { KEY_ZONES, zoneOf, createWorkTracker, createWorkInput, openWin32Input, SEND_EVERY_MS, PRESSES_MAX, MOVE_FULL_PX };
+module.exports = { KEY_ZONES, KEY_IDS, zoneOf, keyIdOf, createWorkTracker, createWorkInput, openWin32Input, SEND_EVERY_MS, PRESSES_MAX, MOVE_FULL_PX };

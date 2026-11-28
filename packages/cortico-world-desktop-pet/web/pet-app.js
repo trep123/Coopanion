@@ -72,6 +72,8 @@ const prefs = {
   clickThrough: false,
   /** Work mode (`window.work`): the pet sits at a desk and its hands follow the keyboard and the mouse (stepWork). */
   work: false,
+  /** `window.workShowKeys`: the window names the keys pressed (lit on the page's keyboard and reached for), the page only. */
+  workShowKeys: true,
 };
 // in a tab (the settings window's preview) the page is its own stage: a wall that answers the pointer, a floor with icons, a night/day button
 const modeBtn = host ? null : modeButton(document.body, () => prefs.theme, (theme) => applyPrefs({ theme }));
@@ -434,6 +436,7 @@ function applyPrefs(p) {
   for (const key of ['fade', 'fullscreenFade']) if (typeof p[key] === 'number') fadeHeard[key].heard(p[key], fadeKey() === key && (SLIDERS.fade.bar.active || !!sliderState.timers.fade));
   if (typeof p.fadeWhenFullscreen === 'boolean') host?.fadeWhenFullscreen?.(p.fadeWhenFullscreen);
   if (typeof p.work === 'boolean') prefs.work = p.work;
+  if (typeof p.workShowKeys === 'boolean') prefs.workShowKeys = p.workShowKeys;
   if (p.cua && typeof p.cua === 'object') prefs.cua = { on: p.cua.on === true, confirmed: p.cua.confirmed === true, canOpen: p.cua.canOpen === true };
   const sized = [prefs.bubbleSize, prefs.fontSize];
   if (typeof p.bubbleSize === 'number') { prefs.bubbleSize = p.bubbleSize; sizeVar('--bubble-size', p.bubbleSize); }
@@ -2947,14 +2950,17 @@ const round1 = (v) => Math.round(v * 10) / 10;
 /**
  * Advances work mode by `dt`: the phase (down from a ledge, walking clear of the edges, the props coming out, seated, carried away, packed
  * up), the window's reading of the keyboard and mouse (only while the props are out), roaming held off, and what the body
- * is told (the kit's `set({ work })`): never the keys, only the hand of the last press and a count.
+ * is told (the kit's `set({ work })`): the hand of the last press, a count and, with `window.workShowKeys`, the keys lit
+ * (`keys`, their places on the keyboard). Nothing of it goes to the World.
  */
 function stepWork(dt) {
   const l = at(), S = bounds().S;
   const room = { minX: DESK.reach * S + 8, maxX: innerWidth - DESK.reach * S - 8 };
   const { phase, changed, target } = work.machine.step(prefs.work && !!body, l, room, T);
   const watch = phase === 'enter' || phase === 'on';
-  if (watch !== work.watched) { work.watched = watch; host?.watchWork?.(watch); }
+  // the keys' ids stay on this page: they light its keyboard and reach the body (`frame.work.keys`), never `send`
+  const watchKey = watch && `keys:${prefs.workShowKeys}`;
+  if (watchKey !== work.watched) { work.watched = watchKey; host?.watchWork?.(watch, { keys: watch && prefs.workShowKeys }); }
   if (phase !== 'off') holdRoam(2);
   if (changed) {
     if (phase === 'walk') body?.walk(target, false, 0);
@@ -2973,7 +2979,7 @@ function stepWork(dt) {
   work.hands.step(dt);
   const v = work.view = work.hands.view(performance.now());
   const state = phase === 'enter' || phase === 'on' || phase === 'leave' ? {
-    phase, hand: v.hand, taps: v.taps, held: v.held, password: v.password, desk: DESK,
+    phase, hand: v.hand, taps: v.taps, held: v.held, password: v.password, desk: DESK, keys: v.pressed,
     ms: { enter: workMs('--work-in', 520), leave: workMs('--work-out', 220) },
     mouse: { dx: round1(v.mouse.x), dy: round1(v.mouse.y), buttons: v.mouse.buttons, active: v.hands.right.onMouse },
   } : phase === 'ground' ? { phase: 'prepare' } : null;

@@ -13,6 +13,8 @@
  * happens to the body is told through `opts.onEvent`; the page around the frame does the rest.
  */
 export { createRig } from './rig.js';
+/** Work mode's keyboard (`frame.work.keys` places its keys on it): every key with its box 0..1 over the keyboard. */
+export { WORK_KEYS as workKeyLayout, WORK_KEY_UNITS as workKeyUnits, WORK_KEY_ROWS as workKeyRows, workKey } from './work-keys.js';
 
 export const f = n => Math.round(n * 10) / 10;
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -1040,7 +1042,7 @@ const SVGNS = 'http://www.w3.org/2000/svg';
  * cue(kind), talk(), setScheme(id, o), dispose(); `words` lists every word its do() knows.
  *
  * `work` is work mode, or null when it is off (the page's desk, web/work-desk.js; the README's 形象包 section):
- * `{ phase, hand, taps, held, mouse, password, desk }`, or just `{ phase: 'prepare' }` while the page waits for a body
+ * `{ phase, hand, taps, held, mouse, password, desk, keys }`, or just `{ phase: 'prepare' }` while the page waits for a body
  * whose layout says `ledge: true` (it stands on a window's or an icon's top) to come down to the floor (a body part that
  * climbs does that; the kit does nothing more, and the page brings the props out where the body stands after 8 s).
  * `phase`: `enter` while the props come out around the standing
@@ -1056,6 +1058,10 @@ const SVGNS = 'http://www.w3.org/2000/svg';
  * itself lies below `desk.top` and draws its hands on the keyboard and the mouse. For a pack that says `can.work: 'scene'`
  * the page draws no props at all: the figure draws its own desk, keyboard, mouse and hands. `ms` `{ enter, leave }` is how
  * long the `enter` and `leave` phases last in milliseconds (0 at low motion), for a figure that brings out its own desk.
+ * `keys` (with config `window.workShowKeys`, else empty): the keys lit now, `{ id, x, y, hand, down, k }`: the key's id and
+ * middle on the keyboard (0..1, x to the right, y from the back row to the front one; `workKeyLayout` has every key's box),
+ * the hand reaching for it, whether it is down, and how lit it is (1 down, fading to 0 after its release). Map them onto
+ * the keyboard the figure draws to light the key and reach for it. They stay in the page: nothing sends them on.
  */
 export function createBody(host, opts) {
   const doc = host.root.ownerDocument;

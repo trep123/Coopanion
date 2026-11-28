@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -8,14 +9,16 @@ import { describe, expect, it } from 'vitest';
  */
 const require_ = createRequire(import.meta.url);
 type Hand = 'left' | 'right';
-interface Zone { hand: Hand; row: number }
+interface Zone { hand: Hand; row: number; id?: string }
 interface Reading { keys?: number[]; buttons?: { left?: boolean; right?: boolean; middle?: boolean }; cursor?: { x: number; y: number } | null; password?: boolean }
-interface Message { held: { left: number; right: number }; presses: Zone[]; buttons: { left: boolean; right: boolean; middle: boolean }; move: { dx: number; dy: number } | null; password: boolean }
+interface Message { held: { left: number; right: number }; presses: Zone[]; buttons: { left: boolean; right: boolean; middle: boolean }; move: { dx: number; dy: number } | null; password: boolean; down?: string[] }
 const input = require_('../host/work-input.cjs') as {
   KEY_ZONES: Map<number, Zone>;
+  KEY_IDS: Map<number, string>;
   zoneOf(vk: number): Zone | null;
-  createWorkTracker(): { update(r: Reading, now: number): Message | null; reset(): void };
-  createWorkInput(o: { cursor?: () => { x: number; y: number } | null; platform?: string; loadKoffi?: () => unknown }): { available: { keys: boolean }; poll(now: number): Message | null; reset(): void };
+  keyIdOf(vk: number): string | null;
+  createWorkTracker(o?: { showKeys?: boolean }): { update(r: Reading, now: number): Message | null; reset(): void; setShowKeys(on: boolean): void };
+  createWorkInput(o: { cursor?: () => { x: number; y: number } | null; platform?: string; loadKoffi?: () => unknown; showKeys?: boolean }): { available: { keys: boolean }; poll(now: number): Message | null; reset(): void; setShowKeys(on: boolean): void };
   SEND_EVERY_MS: number;
   PRESSES_MAX: number;
   MOVE_FULL_PX: number;
@@ -23,9 +26,11 @@ const input = require_('../host/work-input.cjs') as {
 
 interface Phase { phase: string; changed: boolean; target: number | null }
 interface Machine { phase: string; step(on: boolean, body: { x: number; mode: string; ledge?: boolean } | null, room: { minX: number; maxX: number }, now: number): Phase }
+interface LayoutKey { id: string; label: string; row: number; hand: Hand | null; x: number; y: number; w: number; h: number; cx: number; cy: number }
 interface HandsView {
-  lit: Array<{ hand: Hand; row: number; col: number }>;
-  hands: { left: { down: boolean }; right: { down: boolean; onMouse: boolean } };
+  lit: Array<{ id: string; k: number; down: boolean; named: boolean }>;
+  pressed: Array<{ id: string; x: number; y: number; hand: Hand; down: boolean; k: number }>;
+  hands: { left: { down: boolean; key: { id: string; x: number; y: number } | null }; right: { down: boolean; onMouse: boolean; key: { id: string; x: number; y: number } | null } };
   mouse: { x: number; y: number; buttons: { left: boolean; right: boolean; middle: boolean } };
   held: { left: boolean; right: boolean };
   hand: Hand | null; taps: number; password: boolean; paused: boolean; keys: boolean;
@@ -36,9 +41,18 @@ const state = await import(new URL('../web/work-state.js', import.meta.url).href
   WORK_WALK_MAX: number;
   WORK_GROUND_MAX: number;
   KEY_LIT_MS: number;
+  KEY_FADE_MS: number;
   PAW_DOWN_MS: number;
   KEY_ROWS: number;
   KEYS_PER_HAND: number;
+};
+
+const keys = await import(new URL('../web/kit/work-keys.js', import.meta.url).href) as {
+  WORK_KEYS: LayoutKey[];
+  WORK_KEY_UNITS: number;
+  WORK_KEY_ROWS: number;
+  workKey(id: unknown): LayoutKey | null;
+  workZoneKeys(hand: Hand, row: number): LayoutKey[];
 };
 
 const VK = { A: 0x41, J: 0x4a, Q: 0x51, P: 0x50, SPACE: 0x20, ENTER: 0x0d, ONE: 0x31, LSHIFT: 0xa0, F13: 0x7c } as const;
@@ -178,6 +192,104 @@ describe('the work input on Windows', () => {
   });
 });
 
+describe('the keys by their place on the keyboard', () => {
+  it('names every letter, digit and the main keys of a standard layout by their KeyboardEvent.code', () => {
+    for (const c of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') expect(input.keyIdOf(c.charCodeAt(0))).toBe(`Key${c}`);
+    for (const d of '0123456789') expect(input.keyIdOf(d.charCodeAt(0))).toBe(`Digit${d}`);
+    expect([0x20, 0x0d, 0x08, 0x09, 0xa0, 0xa1, 0xa2, 0xa3, 0x14, 0xc0, 0xbd, 0xbb, 0xdb, 0xdd, 0xdc, 0xba, 0xde, 0xbc, 0xbe, 0xbf].map(input.keyIdOf))
+      .toEqual(['Space', 'Enter', 'Backspace', 'Tab', 'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'CapsLock', 'Backquote', 'Minus', 'Equal', 'BracketLeft', 'BracketRight', 'Backslash', 'Semicolon', 'Quote', 'Comma', 'Period', 'Slash']);
+  });
+
+  it('names no key the page does not draw, and none it has no zone for', () => {
+    for (const vk of [0x1b, 0x70, 0x25, 0x2e, 0x60, 0x10, 0x11, 0x12, 0x01, VK.F13]) expect(input.keyIdOf(vk)).toBeNull();
+    for (const vk of input.KEY_IDS.keys()) expect(input.zoneOf(vk)).not.toBeNull();
+  });
+
+  it('gives every named key a place on the shared layout, typed by the hand of its zone', () => {
+    for (const [vk, id] of input.KEY_IDS) {
+      const k = keys.workKey(id);
+      expect(k, id).not.toBeNull();
+      if (k!.hand) expect(k!.hand, id).toBe(input.zoneOf(vk)!.hand);
+    }
+    expect(keys.workKey('Space')!.hand).toBeNull();
+  });
+
+  it('lays the keys out in staggered rows that fill the keyboard without overlapping', () => {
+    expect(new Set(keys.WORK_KEYS.map((k) => k.id)).size).toBe(keys.WORK_KEYS.length);
+    for (let r = 0; r < keys.WORK_KEY_ROWS; r++) {
+      const row = keys.WORK_KEYS.filter((k) => k.row === r);
+      expect(row[0]!.x).toBe(0);
+      expect(row.reduce((a, k) => a + k.w, 0)).toBeCloseTo(1, 3);
+      for (let i = 1; i < row.length; i++) expect(row[i]!.x).toBeCloseTo(row[i - 1]!.x + row[i - 1]!.w, 3);
+      for (const k of row) { expect(k.y).toBeCloseTo(r / keys.WORK_KEY_ROWS, 3); expect(k.cx).toBeCloseTo(k.x + k.w / 2, 3); }
+    }
+    // the stagger: Q sits right of 1, A right of Q, Z right of A
+    const cx = (id: string) => keys.workKey(id)!.cx;
+    expect(cx('KeyQ')).toBeGreaterThan(cx('Digit1'));
+    expect(cx('KeyA')).toBeGreaterThan(cx('KeyQ'));
+    expect(cx('KeyZ')).toBeGreaterThan(cx('KeyA'));
+  });
+});
+
+describe('the input tracker with workShowKeys', () => {
+  it('names each key pressed and the keys held, and lets go of them on release', () => {
+    const tr = input.createWorkTracker({ showKeys: true });
+    tr.update({ keys: [] }, 0);
+    const m = tr.update({ keys: [VK.A, VK.SPACE] }, 100)!;
+    expect(m.presses).toEqual([{ hand: 'left', row: 2, id: 'KeyA' }, { hand: 'left', row: 3, id: 'Space' }]);
+    expect(m.down!.sort()).toEqual(['KeyA', 'Space']);
+    const up = tr.update({ keys: [VK.SPACE] }, 200)!;
+    expect(up).toMatchObject({ presses: [], down: ['Space'] });
+    // Esc has no place on the page's keyboard: its zone only
+    expect(tr.update({ keys: [VK.SPACE, 0x1b] }, 300)!.presses).toEqual([{ hand: 'left', row: 0 }]);
+  });
+
+  it('names nothing while a password box has the focus, neither presses nor held keys', () => {
+    const tr = input.createWorkTracker({ showKeys: true });
+    tr.update({ keys: [] }, 0);
+    const m = tr.update({ keys: [VK.A, VK.J], password: true }, 100)!;
+    expect(m).toMatchObject({ presses: [], held: { left: 0, right: 0 }, password: true });
+    expect(m.down).toBeUndefined();
+    expect(JSON.stringify(m)).not.toMatch(/Key|Digit|Space/);
+    // held from before the box: no press once it is left
+    expect(tr.update({ keys: [VK.A, VK.J], password: false }, 200)!.presses).toEqual([]);
+  });
+
+  it('names no key with workShowKeys off, as before, and stops naming them once it is turned off', () => {
+    const off = input.createWorkTracker();
+    off.update({ keys: [] }, 0);
+    const m = off.update({ keys: [VK.A] }, 100)!;
+    expect(m.presses).toEqual([{ hand: 'left', row: 2 }]);
+    expect(m.down).toBeUndefined();
+    const tr = input.createWorkTracker({ showKeys: true });
+    tr.update({ keys: [] }, 0);
+    expect(tr.update({ keys: [VK.J] }, 100)!.presses).toEqual([{ hand: 'right', row: 2, id: 'KeyJ' }]);
+    tr.setShowKeys(false);
+    const after = tr.update({ keys: [VK.J, VK.P] }, 200)!;
+    expect(after.presses).toEqual([{ hand: 'right', row: 1 }]);
+    expect(JSON.stringify(after)).not.toMatch(/Key/);
+  });
+
+  it('on Windows, names the keys only when asked, and none behind a password box', () => {
+    const world = { keys: new Set<number>(), focus: null as { hwnd: bigint; cls: string; style: number } | null };
+    const w = input.createWorkInput({ platform: 'win32', loadKoffi: () => fakeKoffi(world), showKeys: true });
+    w.poll(0);
+    world.keys.add(VK.J);
+    expect(w.poll(100)).toMatchObject({ presses: [{ hand: 'right', row: 2, id: 'KeyJ' }], down: ['KeyJ'] });
+    world.keys.clear(); w.poll(200);
+    world.focus = { hwnd: 7n, cls: 'Edit', style: 0x0020 };
+    w.poll(500);
+    world.keys.add(VK.A);
+    const m = w.poll(600);
+    expect(JSON.stringify(m ?? {})).not.toMatch(/Key/);
+    w.setShowKeys(false);
+    world.focus = null; world.keys.clear(); w.poll(900);
+    world.keys.add(VK.A);
+    expect(w.poll(1000)).toMatchObject({ presses: [{ hand: 'left', row: 2 }] });
+    expect(JSON.stringify(w.poll(1100) ?? {})).not.toMatch(/Key/);
+  });
+});
+
 describe('the work phases', () => {
   const room = { minX: 100, maxX: 900 };
   const standing = (x = 500) => ({ x, mode: 'idle' });
@@ -273,8 +385,10 @@ describe('the hands at the desk', () => {
     h.feed({ held: { left: 1, right: 0 }, presses: [{ hand: 'left', row: 2 }], buttons: {}, move: null, password: false }, 1000);
     const v = h.view(1000);
     expect(v.lit).toHaveLength(1);
-    expect(v.lit[0]).toMatchObject({ hand: 'left', row: 2 });
-    expect(v.lit[0]!.col).toBeLessThan(state.KEYS_PER_HAND);
+    expect(v.lit[0]).toMatchObject({ named: false, k: 1 });
+    expect(keys.workZoneKeys('left', 2).map((k) => k.id)).toContain(v.lit[0]!.id);
+    // a zone's guess is the page's alone: the body gets no key for it
+    expect(v.pressed).toEqual([]);
     expect(v).toMatchObject({ hand: 'left', taps: 1, held: { left: true, right: false }, hands: { left: { down: true } } });
     expect(h.view(1000 + state.PAW_DOWN_MS).hands.left.down).toBe(true); // still held
     h.feed({ held: { left: 0, right: 0 } }, 1000 + state.PAW_DOWN_MS);
@@ -318,6 +432,55 @@ const desk = await import(new URL('../web/work-desk.js', import.meta.url).href) 
   chairFit(box: { x0: number; x1: number; y0: number } | null, minY?: number): { x0: number; x1: number; top: number };
 };
 
+describe('the named keys at the desk', () => {
+  it('lights the key pressed while it is held and fades it over KEY_FADE_MS after its release', () => {
+    const h = state.createWorkHands();
+    h.feed({ held: { left: 1, right: 0 }, presses: [{ hand: 'left', row: 2, id: 'KeyF' }], down: ['KeyF'] }, 1000);
+    let v = h.view(1000);
+    expect(v.lit).toEqual([{ id: 'KeyF', k: 1, down: true, named: true }]);
+    expect(v.pressed).toEqual([{ id: 'KeyF', x: keys.workKey('KeyF')!.cx, y: keys.workKey('KeyF')!.cy, hand: 'left', down: true, k: 1 }]);
+    expect(v.hands.left.key).toEqual({ id: 'KeyF', x: keys.workKey('KeyF')!.cx, y: keys.workKey('KeyF')!.cy });
+    // held long past KEY_LIT_MS: still lit
+    expect(h.view(2000).lit[0]).toMatchObject({ id: 'KeyF', k: 1, down: true });
+    h.feed({ held: { left: 0, right: 0 }, presses: [], down: [] }, 2000);
+    v = h.view(2000 + state.KEY_FADE_MS / 2);
+    expect(v.lit[0]!.k).toBeCloseTo(.5, 1);
+    expect(v.lit[0]!.down).toBe(false);
+    expect(h.view(2000 + state.KEY_FADE_MS + 1).lit).toEqual([]);
+  });
+
+  it('keeps a tap between two messages lit for PAW_DOWN_MS, then fades it', () => {
+    const h = state.createWorkHands();
+    h.feed({ presses: [{ hand: 'right', row: 2, id: 'KeyJ' }], down: [] }, 0);
+    expect(h.view(state.PAW_DOWN_MS - 1).lit[0]).toMatchObject({ k: 1, down: true });
+    expect(h.view(state.PAW_DOWN_MS + state.KEY_FADE_MS + 1).lit).toEqual([]);
+  });
+
+  it('sends the space bar to the nearer thumb: the left one, the right one after the right hand typed', () => {
+    const h = state.createWorkHands();
+    h.feed({ presses: [{ hand: 'left', row: 3, id: 'Space' }] }, 0);
+    expect(h.view(0).pressed[0]!.hand).toBe('left');
+    h.feed({ presses: [{ hand: 'right', row: 2, id: 'KeyL' }] }, 10);
+    h.feed({ presses: [{ hand: 'left', row: 3, id: 'Space' }] }, 20);
+    expect(h.view(20).pressed.find((p) => p.id === 'Space')!.hand).toBe('right');
+    expect(h.view(20).hands.right.key!.id).toBe('Space');
+  });
+
+  it('drops every key at a password and at a pause, and ignores ids it has no place for', () => {
+    const h = state.createWorkHands();
+    h.feed({ presses: [{ hand: 'left', row: 2, id: 'KeyA' }], down: ['KeyA'] }, 0);
+    h.feed({ presses: [], password: true }, 1);
+    expect(h.view(1)).toMatchObject({ lit: [], pressed: [] });
+    h.feed({ presses: [{ hand: 'left', row: 2, id: 'KeyA' }], down: ['KeyA'] }, 2);
+    h.feed({ paused: true }, 3);
+    expect(h.view(3)).toMatchObject({ lit: [], pressed: [] });
+    h.feed({ paused: false }, 4);
+    h.feed({ presses: [{ hand: 'right', row: 0, id: 'F13' }], down: ['F13', '<script>'] }, 5);
+    expect(h.view(5).pressed).toEqual([]);
+    expect(h.view(5).lit.every((l) => !l.named)).toBe(true);
+  });
+});
+
 describe('chairFit', () => {
   it('keeps the chair as drawn behind a body as wide as it, and when the body names no box', () => {
     expect(desk.chairFit({ x0: 20, x1: 236, y0: 12 })).toEqual({ x0: 44, x1: 212, top: 108 });
@@ -331,5 +494,25 @@ describe('chairFit', () => {
     expect(c.x0).toBeLessThan(c.x1);
     expect(desk.chairFit({ x0: 120, x1: 136, y0: 200 }).top).toBeLessThanOrEqual(160);
     expect(desk.chairFit({ x0: 20, x1: 236, y0: 12 }, 120).top).toBe(130);
+  });
+});
+
+describe('where the keys go on the page', () => {
+  const src = readFileSync(new URL('../web/pet-app.js', import.meta.url), 'utf8');
+  it('feeds the window\'s work messages only to the hands, and their view only to the desk and the body', () => {
+    expect(src.match(/host\?\.onWork\?\.\(([^\n]*)\)/)?.[1]).toBe('(m) => work.hands.feed(m, performance.now())');
+    const uses = [...src.matchAll(/\bwork\.view\b|\bv\.pressed\b/g)].map((m) => src.slice(src.lastIndexOf('\n', m.index) + 1, src.indexOf('\n', m.index)).trim());
+    for (const line of uses) expect(line, line).not.toMatch(/\bsend\(|ws\.send|postMessage|console\.|log\(/);
+  });
+
+  it('sends the World nothing of work mode but its switch', () => {
+    // every message to the World (`send`), one statement each: none carries the hands, the keys or the body's work state
+    const sends = [...src.matchAll(/\bsend\(\{[^\n]*/g)].map((m) => m[0]);
+    expect(sends.length).toBeGreaterThan(10);
+    for (const s of sends) expect(s, s).not.toMatch(/work\.(view|hands)|pressed|\blit\b|down:|presses|\bkeys\b|state\b/);
+    expect(sends.filter((s) => /work/.test(s)).map((s) => s.replace(/;.*$/, ''))).toEqual([
+      "send({ t: 'interrupted', walkId: m.id, x: (at()?.x ?? 0) / innerWidth, by: 'work' })",
+      "send({ t: 'prefs', work: prefs.work })",
+    ]);
   });
 });
